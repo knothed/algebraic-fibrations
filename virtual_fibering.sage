@@ -104,17 +104,22 @@ def kill_permutations_and_isos(cols, isos):
     result = []
 
     def is_new(col):
+        c2i = 0
         for c2 in result:
+            fi = 0
             for f in isos:
-                if is_color_permutation_iso(col,c2,f): return False
+                if is_color_permutation_iso(col,c2,f):
+                    return False
+                fi += 1
+            c2i += 1
         return True
 
-    i = 1
+    i = 0
     l = len(cols)
     for col in cols:
         #print(f'{i} of {l}')
-        i += 1
         if is_new(col): result.append(col)
+        i += 1
 
     return result
 
@@ -146,6 +151,14 @@ def legal_states(m):
         else:
             result.add(i)
     return result
+
+#1-legality:
+#for i in range(1000):
+#     print(i)
+#     g=next(gs)
+#     if g.is_tree(): continue
+#     if g.is_connected() and len(g.clique_complex().fundamental_group().gens())==0: a += 1
+
 
 # takes states where the highest vertex is excluded, i.e. OUT.
 def adlinks2(G, state):
