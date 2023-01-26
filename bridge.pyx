@@ -6,6 +6,8 @@ cdef extern from "fast.c":
 
     bint is_state_legal(int n, int* adj_matrix, int state)
 
+    int* get_isometries(int n, int* adj, int* result_count)
+
 from sage.all import *
 # from cpython cimport array
 # import array
@@ -23,7 +25,7 @@ def reduced_colorings(g,c):
 
     cdef int result_count = 0
     cdef int* cresult = kill_permutations_and_isos(n,c,ccols,len(pycols),cisos,len(pyisos),&result_count)
-    pyresult = colorings_from_array(cresult, result_count, n)
+    pyresult = list_of_lists_from_array(cresult, result_count, n)
 
     free(ccols)
     free(cisos)
@@ -35,6 +37,17 @@ def state_legal(adj, int state):
     cdef int legal = is_state_legal(n,cadj,state)
     free(cadj)
     return legal == 1
+
+def get_isometries_c(adj):
+    cdef int n = adj.dimensions()[0]
+    cdef int* cadj = list_to_array(adj._list())
+
+    cdef int result_count = 0
+    cdef int* cisos = get_isometries(n,cadj,&result_count)
+    pyisos = list_of_lists_from_array(cisos, result_count, n)
+
+    free(cadj)
+    return pyisos
 
 ## C CONVERSION TOOLS ##
 
@@ -62,7 +75,7 @@ cdef int* list_of_lists_to_array(isometries, n):
             res[n*i+j] = isometries[i][j]
     return res
 
-cdef colorings_from_array(int* cols, int num_cols, int n):
+cdef list_of_lists_from_array(int* cols, int num_cols, int n):
     result = []
     for i in range(num_cols):
         col = []
