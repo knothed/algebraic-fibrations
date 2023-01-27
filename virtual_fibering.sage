@@ -1,12 +1,22 @@
 from sage.graphs.graph_coloring import *
 
-def check_all_graphs(n,add=2):
+def check_all_graphs_c(n,add=2,verbose=True):
     i = 0
     for g in graphs(n):
         i += 1
-        print(f'{i}:')
+        n = time_ms()
+        if verbose: print(f'{i}:')
         if not precheck(g): continue
-        if graph_fibers(g,add): yield g
+        if graph_fiberings(g, max_cols=g.chromatic_number()+add-1, verbose=verbose): yield g
+        if verbose: print(f'{i} took {time_ms()-n} ms')
+
+def check_all_graphs(n,add=2,verbose=True):
+    i = 0
+    for g in graphs(n):
+        i += 1
+        if verbose: print(f'{i}:')
+        if not precheck(g): continue
+        if graph_fibers(g,add,verbose): yield g
 
 def precheck(g):
     if curv2(g) < 0: return False
@@ -15,7 +25,7 @@ def precheck(g):
     # etc.
     return True
 
-def graph_fibers(g,col_tries=2):
+def graph_fibers(g,col_tries=2,verbose=True):
     c = g.chromatic_number()
     n = g.order()
 
@@ -26,13 +36,13 @@ def graph_fibers(g,col_tries=2):
     t1 = now()
     legals = legal_states(g.adjacency_matrix())
     t2 = now()
-    print(f'get legal states: {t2-t1}ms')
+    if verbose: print(f'get legal states: {t2-t1}ms')
 
     for c in range(c,c+col_tries):
         t3 = now()
         cols = all_colorings(g,c)
         t4 = now()
-        print(f'get {len(cols)} {c}-colorings: {t4-t3}ms')
+        if verbose: print(f'get {len(cols)} {c}-colorings: {t4-t3}ms')
 
         total = len(cols)
         i = 0
@@ -45,7 +55,7 @@ def graph_fibers(g,col_tries=2):
                     return col, get_binary(n,state)
                 legal -= orbit
             i += 1
-        print(f'checking the {c}-colorings: {now()-t4}ms')
+        if verbose: print(f'checking the {c}-colorings: {now()-t4}ms')
 
 
 # the (half-)orbit of a coloring on a state which is represented as a number in 0 ..< 2^(n-1).

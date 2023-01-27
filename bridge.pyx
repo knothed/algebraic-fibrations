@@ -1,55 +1,73 @@
+from sage.all import *
+from libc.stdlib cimport malloc, realloc, free
+
+#### GRAPH FIBERING ####
+
+def graph_fiberings(g, max_cols=None, verbose=True):
+    cdef int n = g.order()
+    cdef int* adj = list_to_array(g.adjacency_matrix()._list())
+
+    # Legal states
+    if verbose: now = time_ms()
+    cdef int legal_count = 0
+    cdef int* legal_states = all_legal_states(n,adj,&legal_count)
+    if verbose: print(f"Get {legal_count} legal states: took {time_ms()-now} ms")
+
+    # Isometries
+    if verbose: now = time_ms()
+    cdef int isos_count = 0
+    cdef int* isos = get_isometries(n, adj, &isos_count)
+    if verbose: print(f"Get {isos_count} isometries: took {time_ms()-now} ms")
+
+    # Colorings
+    cdef int cmin = g.chromatic_number()
+    cdef int cmax = int(log(legal_count,2))+1
+    if max_cols is not None: cmax = min(cmax, max_cols)
+    if verbose: print(f"#colors: between {cmin} and {cmax}")
+
+    cdef int i, c, reduced_count, orbit_count = 0
+    cdef int* cols
+    cdef int* reduced_cols
+    cdef int* orbit
+    fibered = False
+    for c in range(cmin,cmax+1):
+        # Get all colorings and reduce by color swapping and graph isometries
+        from sage.graphs.graph_coloring import all_graph_colorings
+        if verbose: now = time_ms()
+        cols_py = list(all_graph_colorings(g,c,vertex_color_dict=True))
+        cols = list_of_dicts_to_array(cols_py,n)
+        reduced_count = 0
+        reduced_cols = kill_permutations_and_isos(n,c,cols,len(cols_py),isos,isos_count,&reduced_count)
+
+        # Find legal orbits
+        for i in range(reduced_count):
+            orbit_count = 0
+            orbit = find_legal_orbits(n,reduced_cols+n*i,legal_states,legal_count,&orbit_count)
+            if (orbit_count > 0):
+                print(f"found legal orbit! col: {list_from_array(reduced_cols+n*i,n)}, states: {list_from_array(orbit,orbit_count)}")
+                fibered = True
+
+        if verbose: print(f"Checking colorings with {c} colors: took {time_ms()-now} ms")
+
+    return fibered
+
+## TOOLS ##
+
 cdef extern from "fast.c":
+    int* all_legal_states(int n, int* adj_matrix, int* result_count)
+    bint is_state_legal(int n, int* adj_matrix, int state)
+
+    int* get_isometries(int n, int* adj, int* result_count)
     int* kill_permutations_and_isos(int n, int num_cols,
                                     int* cols, int cols_count,
                                     int* isos, int isos_count,
                                     int* result_count)
 
-    bint is_state_legal(int n, int* adj_matrix, int state)
+    int* find_legal_orbits(int n, int* coloring, int* legal_states, int num_states, int* result_count)
 
-    int* get_isometries(int n, int* adj, int* result_count)
-
-from sage.all import *
-# from cpython cimport array
-# import array
-
-from libc.stdlib cimport malloc, free
-
-def reduced_colorings(g,c):
-    from sage.graphs.graph_coloring import all_graph_colorings
-    pycols = list(all_graph_colorings(g,c,vertex_color_dict=True))
-    pyisos = get_isometries_(g.adjacency_matrix())
-
-    n = g.order()
-    cdef int* ccols = list_of_dicts_to_array(pycols,n)
-    cdef int* cisos = list_of_lists_to_array(pyisos,n)
-
-    cdef int result_count = 0
-    cdef int* cresult = kill_permutations_and_isos(n,c,ccols,len(pycols),cisos,len(pyisos),&result_count)
-    pyresult = list_of_lists_from_array(cresult, result_count, n)
-
-    free(ccols)
-    free(cisos)
-    return pyresult
-
-def state_legal(adj, int state):
-    cdef int n = adj.dimensions()[0]
-    cdef int* cadj = list_to_array(adj._list())
-    cdef int legal = is_state_legal(n,cadj,state)
-    free(cadj)
-    return legal == 1
-
-def get_isometries_c(adj):
-    cdef int n = adj.dimensions()[0]
-    cdef int* cadj = list_to_array(adj._list())
-
-    cdef int result_count = 0
-    cdef int* cisos = get_isometries(n,cadj,&result_count)
-    pyisos = list_of_lists_from_array(cisos, result_count, n)
-
-    free(cadj)
-    return pyisos
-
-## C CONVERSION TOOLS ##
+def time_ms():
+    import time
+    return time.time_ns() // 1000000
 
 cdef int* list_to_array(list):
     cdef int l = len(list)
@@ -84,27 +102,8 @@ cdef list_of_lists_from_array(int* cols, int num_cols, int n):
         result.append(col)
     return result
 
-
-## FROM MARTELLI, TODO: REWRITE IN CYTHON
-
-def get_isometries_(G, level = 0, isometries = [], isometry = [], n = 0):
-    if n == 0:
-        n = G.dimensions()[0]
-        isometry = [0 for i in range(n)]
-        isometries = []
-    if level == n:
-        isometries.append(isometry[:])
-        # print (isometry)    # ACHTUNG
-        # print (len(isometries)) # ACHTUNG
+cdef list_from_array(int* cols, int n):
+    result = []
     for i in range(n):
-        if isometry[:level].count(i) == 0:
-            is_ok = True
-            for j in range(level):
-                if G[level, j] != G[i, isometry[j]]:
-                    is_ok = False
-                    break
-            if is_ok == True:
-                isometry[level] = i
-                get_isometries_(G, level + 1, isometries, isometry, n)
-    if level == 0:
-        return isometries
+        result.append(cols[i])
+    return result
