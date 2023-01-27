@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <stdbool.h>
+#define MAX(a,b) ((a) > (b) ? (a) : (b))
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
 
 /******* ISOMORPHIC COLORINGS *******/
 
@@ -58,12 +60,29 @@ bool is_color_permutation_iso(int n, int num_cols ,int* col1, int* col2, int* f)
 
 #define MAX_VERTS 20
 bool subgraph_connected(int n, int* adj_matrix, int sub_size, int vertices[]);
+bool is_state_legal(int n, int* adj_matrix, int state);
+
+int* all_legal_states(int n, int* adj_matrix, int* result_count) {
+    int max = 1 << (n-1);
+    int* result = (int*)malloc(max*sizeof(int));
+    int count = 0;
+
+    for (int i=1; i<max; i++) {
+        if (is_state_legal(n,adj_matrix,i)) {
+            result[count] = i;
+            count++;
+        }
+    }
+
+    *result_count = count;
+    return result;
+}
 
 // Check whether the ascending link and descending link given by the state are both connected and nonempty.
 // In other words, check whether the state is legal.
 // The graph is given by its adjacency matrix in contiguous form, n successive entries making a row.
-// The state is given as a bitmap, with bits 0 to n-1 representing the vertices.
-bool is_state_legal(int n, int* adj_matrix, int state) {
+// The state is given as a bitset, with bits 0 to n-1 representing the vertices.
+bool is_state_legal(int n, int* adj, int state) {
     // Read graph columns from state bitset
     int asc_size = 0;
     int asc[n];
@@ -81,7 +100,7 @@ bool is_state_legal(int n, int* adj_matrix, int state) {
         return false; // subgraph is empty
 
     // Check connectedness
-    return subgraph_connected(n, adj_matrix, asc_size, asc) && subgraph_connected(n, adj_matrix, n-asc_size, desc);
+    return subgraph_connected(n, adj, asc_size, asc) && subgraph_connected(n, adj, n-asc_size, desc);
 }
 
 typedef struct {
@@ -140,7 +159,6 @@ bool subgraph_connected(int n, int* adj, int sub_size, int vertices[]) {
 
     return true;
 }
-
 
 /******** GRAPH ISOMETRIES ********/
 
@@ -203,4 +221,76 @@ int* get_isometries_impl(int n, int* adj, int* isometries, int* isos_count, int 
     }
 
     return isometries;
+}
+
+/******** FIND LEGAL ORBIT ********/
+
+// Find all legal orbits from the given legal states in the given coloring.
+// The returned list contains a single legal state per legal orbit.
+int* find_legal_orbits(int n, int* coloring, int* legal_states, int num_states, int* result_count) {
+    int size_guess = 5;
+    int* result = (int*)malloc(size_guess*sizeof(int));
+    *result_count = 0;
+
+    // Convert coloring list into vertex bitmasks
+    int color_masks[n];
+    int num_cols = 0;
+    memset(color_masks,0,n*sizeof(int));
+    for (int i=0; i<n; i++) {
+        color_masks[coloring[i]] += (1<<i);
+        num_cols = MAX(num_cols, coloring[i]+1);
+    }
+
+    // Convert legal_states into "dictionary" for fast checking whether state is contained
+    int max_states = 1 << (n-1);
+    int legal[max_states];
+    memset(legal,0,max_states*sizeof(int));
+    for (int i=0; i<num_states; i++) {
+        legal[legal_states[i]] = 1;
+    }
+
+    // Go through all legal states until none are left
+    int idx = 0;
+    int remaining = num_states;
+    int orbit_size = 1 << num_cols;
+
+    while (remaining >= (orbit_size >> 1)) {
+        int state = legal_states[idx];
+        if (!legal[state]) {
+            idx++;
+            continue;
+        }
+
+        // Check if orbit is legal and delete it from the dictionary simultaneously
+        bool orbit_legal = true;
+
+        for (int c=0; c<orbit_size; c++) {
+            // Act on state
+            int acted = state;
+            for (int b=0; b<num_cols; b++) {
+                if ((c >> b) & 1)
+                    acted ^= color_masks[b];
+            }
+
+            if (acted >= max_states)
+                continue; // I/O-symmetry of state; the negative state is in the same orbit
+
+            // Remove from dictionary
+            if (legal[acted]) {
+                remaining--;
+                legal[acted] = false;
+            } else {
+                orbit_legal = false;
+            }
+        }
+
+        if (orbit_legal) {
+            result[*result_count] = state;
+            (*result_count)++;
+            if ((*result_count)%size_guess == 0)
+                result = realloc(result, ((*result_count)+size_guess)*sizeof(int));
+        }
+    }
+
+    return result;
 }
