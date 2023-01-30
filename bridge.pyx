@@ -19,12 +19,24 @@ def graph_fiberings(g, max_cols=None, verbose=True):
     cdef int* isos = get_isometries(n, adj, &isos_count)
     if verbose: print(f"Get {isos_count} isometries: took {time_ms()-now} ms")
 
-    # Colorings
+    # Colorings: max #colors
+    from sage.graphs.cliquer import all_cliques
+    if verbose: now = time_ms()
+    cliques_py = list(all_cliques(g,min_size=2))
+    cdef int* cliques = &n # silence referenced before assignment warning
+    cdef int* cliques_start_indices = &n # silence referenced before assignment warning
+    list_of_variable_length_lists_to_array(cliques_py, &cliques, &cliques_start_indices)
+    if verbose: print(f"Convert {len(cliques_py)} cliques to C: took {time_ms()-now} ms")
+
+    if verbose: now = time_ms()
+    cdef int cmax = max_possible_colors(n, cliques, cliques_start_indices, len(cliques_py), legal_states, legal_count)
+    if verbose: print(f"Get {cmax} max possible colors: took {time_ms()-now} ms")
+
     cdef int cmin = g.chromatic_number()
-    cdef int cmax = int(log(legal_count,2))+1
     if max_cols is not None: cmax = min(cmax, max_cols)
     if verbose: print(f"#colors: between {cmin} and {cmax}")
 
+    # Colorings: all colorings of specific #colors
     cdef int i, c, reduced_count, orbit_count = 0
     cdef int* cols
     cdef int* reduced_cols
@@ -57,6 +69,8 @@ cdef extern from "fast.c":
     int* all_legal_states(int n, int* adj_matrix, int* result_count)
     bint is_state_legal(int n, int* adj_matrix, int state)
 
+    int max_possible_colors(int n, int* cliques, int* cliques_start_indices, int cliques_count, int* legal_states, int legal_count)
+
     int* get_isometries(int n, int* adj, int* result_count)
     int* kill_permutations_and_isos(int n, int num_cols,
                                     int* cols, int cols_count,
@@ -75,6 +89,24 @@ cdef int* list_to_array(list):
     for i in range(l):
         res[i] = list[i]
     return res
+
+cdef void list_of_variable_length_lists_to_array(list, int** result, int** start_indices):
+    cdef int total_len = 0
+    cdef int i,j
+    for i in range(len(list)):
+        total_len += len(list[i])
+
+    result[0] = <int*> malloc(sizeof(int)*total_len)
+    start_indices[0] = <int*> malloc(sizeof(int)*(len(list)+1))
+
+    cdef int current_count = 0
+    for i in range(len(list)):
+        l = list[i]
+        start_indices[0][i] = current_count
+        for j in range(len(l)):
+            result[0][current_count+j] = l[j]
+        current_count += len(l)
+    start_indices[0][len(list)] = current_count
 
 cdef int* list_of_dicts_to_array(colorings, n):
     cdef int l = len(colorings)

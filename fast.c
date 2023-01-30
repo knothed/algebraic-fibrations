@@ -3,7 +3,53 @@
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 
-/******* ISOMORPHIC COLORINGS *******/
+/******* COLORING *******/
+
+int log2_int(int a) {
+    if (a <= 0) return -1;
+    int r = 0;
+    int b = a;
+    while (b >>= 1) r++;
+    return r;
+}
+
+// Deduce an upper bound on the number of colors for a coloring from cliques in the graph and the shape of the legal states.
+// legal_states only contains non-redundant legal states from 0 to 2^(n-1).
+// cliques only contains cliques of size 2 or more.
+// cliques_start_indices must contain cliques_count+1 entries, the first being 0 and the last being the total size of the continuous cliques array.
+int max_possible_colors(int n, int* cliques, int* cliques_start_indices, int cliques_count, int* legal_states, int legal_count) {
+    // 1-clique check (number of legal states)
+    int upper_bound = log2_int(legal_count) + 1;
+    int p = upper_bound;
+
+    for (int i=0; i<cliques_count; i++) {
+        int size = cliques_start_indices[i+1]-cliques_start_indices[i];
+        int max = 1<<(size-1);
+        int counts[max];
+        memset(counts,0,max*sizeof(int));
+
+        // Count how often (all combinations of the bits at the positions of the vertices in the clique) occur in the legal states
+        for (int j=0; j<legal_count; j++) {
+            int bits = 0;
+            for (int b=0; b<size; b++) {
+                bits += ((legal_states[j] >> b) & 1) * (1<<b); // check if bit b is set in legal_states[j]
+            }
+
+            if (bits >= max)
+                bits = 2*max - bits - 1;
+            counts[bits]++;
+        }
+
+        // Evaluate
+        int min = legal_count;
+        for (int c=0; c<max; c++)
+            min = MIN(min, counts[c]);
+
+        upper_bound = MIN(upper_bound, log2_int(min << size));
+    }
+
+    return upper_bound;
+}
 
 bool is_color_permutation_iso(int n, int c, int* col1, int* col2, int* f);
 
@@ -62,6 +108,8 @@ bool is_color_permutation_iso(int n, int num_cols ,int* col1, int* col2, int* f)
 bool subgraph_connected(int n, int* adj_matrix, int sub_size, int vertices[]);
 bool is_state_legal(int n, int* adj_matrix, int state);
 
+// All legal states between 0 and 2^(n-1).
+// To avoid redundancy, we don't return any legal states where vertex (n-1) is set.
 int* all_legal_states(int n, int* adj_matrix, int* result_count) {
     int max = 1 << (n-1);
     int* result = (int*)malloc(max*sizeof(int));
@@ -268,8 +316,7 @@ int* find_legal_orbits(int n, int* coloring, int* legal_states, int num_states, 
             // Act on state
             int acted = state;
             for (int b=0; b<num_cols; b++) {
-                if ((c >> b) & 1)
-                    acted ^= color_masks[b];
+                acted ^= ((c >> b) & 1) * color_masks[b]; // act if bit b is set in c
             }
 
             if (acted >= max_states)
