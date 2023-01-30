@@ -1,6 +1,8 @@
 # Created by https://www.toptal.com/developers/gitignore/api/c,python,visualstudiocode
 # Edit at https://www.toptal.com/developers/gitignore?templates=c,python,visualstudiocode
 
+.DS_STORE
+
 ### C ###
 # Prerequisites
 *.d

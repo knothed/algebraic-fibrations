@@ -61,23 +61,31 @@ def graph_fiberings(g, max_cols=None, verbose=True):
 
         if verbose: print(f"Checking colorings with {c} colors: took {time_ms()-now} ms")
 
+        free(cols)
+        free(reduced_cols)
+        free(orbit)
+
+    free(adj)
+    free(legal_states)
+    free(isos)
+    free(cliques)
+    free(cliques_start_indices)
+
     return fibered
 
 ## TOOLS ##
 
-cdef extern from "fast.c":
+cdef extern from "coloring.c":
+    int max_possible_colors(int n, int* cliques, int* cliques_start_indices, int cliques_count, int* legal_states, int legal_count)
+    int* kill_permutations_and_isos(int n, int num_cols, int* cols, int cols_count, int* isos, int isos_count, int* result_count)
+
+cdef extern from "legal.c":
     int* all_legal_states(int n, int* adj_matrix, int* result_count)
     bint is_state_legal(int n, int* adj_matrix, int state)
-
-    int max_possible_colors(int n, int* cliques, int* cliques_start_indices, int cliques_count, int* legal_states, int legal_count)
-
-    int* get_isometries(int n, int* adj, int* result_count)
-    int* kill_permutations_and_isos(int n, int num_cols,
-                                    int* cols, int cols_count,
-                                    int* isos, int isos_count,
-                                    int* result_count)
-
     int* find_legal_orbits(int n, int* coloring, int* legal_states, int num_states, int* result_count)
+
+cdef extern from "isom.c":
+    int* get_isometries(int n, int* adj, int* result_count)
 
 def time_ms():
     import time
