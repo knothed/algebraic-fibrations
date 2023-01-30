@@ -22,14 +22,12 @@ def graph_fiberings(g, max_cols=None, verbose=True):
     # Colorings: max #colors
     from sage.graphs.cliquer import all_cliques
     if verbose: now = time_ms()
-    cliques_py = list(all_cliques(g,min_size=2))
-    cdef int* cliques = &n # silence referenced before assignment warning
-    cdef int* cliques_start_indices = &n # silence referenced before assignment warning
-    list_of_variable_length_lists_to_array(cliques_py, &cliques, &cliques_start_indices)
+    cliques_py = sorted(list(all_cliques(g,min_size=2)), key=len, reverse=True)
+    cdef arr_of_arrs cliques = list_of_variable_length_lists_to_array(cliques_py)
     if verbose: print(f"Convert {len(cliques_py)} cliques to C: took {time_ms()-now} ms")
 
     if verbose: now = time_ms()
-    cdef int cmax = max_possible_colors(n, cliques, cliques_start_indices, len(cliques_py), legal_states, legal_count)
+    cdef int cmax = max_possible_colors(n, cliques, legal_states, legal_count)
     if verbose: print(f"Get {cmax} max possible colors: took {time_ms()-now} ms")
 
     cdef int cmin = g.chromatic_number()
@@ -68,15 +66,23 @@ def graph_fiberings(g, max_cols=None, verbose=True):
     free(adj)
     free(legal_states)
     free(isos)
-    free(cliques)
-    free(cliques_start_indices)
+    free_arr(cliques)
 
     return fibered
 
 ## TOOLS ##
 
+cdef extern from "utils.c":
+    ctypedef struct arr_of_arrs:
+        int* data
+        int* start_indices
+        int len
+    void free_arr(arr_of_arrs arr)
+    arr_of_arrs create_arr_of_arrs(int max_total_elems, int max_arrs)
+    void print_arr(arr_of_arrs arr)
+
 cdef extern from "coloring.c":
-    int max_possible_colors(int n, int* cliques, int* cliques_start_indices, int cliques_count, int* legal_states, int legal_count)
+    int max_possible_colors(int n, arr_of_arrs cliques, int* legal_states, int legal_count)
     int* kill_permutations_and_isos(int n, int num_cols, int* cols, int cols_count, int* isos, int isos_count, int* result_count)
 
 cdef extern from "legal.c":
@@ -98,23 +104,25 @@ cdef int* list_to_array(list):
         res[i] = list[i]
     return res
 
-cdef void list_of_variable_length_lists_to_array(list, int** result, int** start_indices):
+cdef arr_of_arrs list_of_variable_length_lists_to_array(list):
     cdef int total_len = 0
     cdef int i,j
     for i in range(len(list)):
         total_len += len(list[i])
 
-    result[0] = <int*> malloc(sizeof(int)*total_len)
-    start_indices[0] = <int*> malloc(sizeof(int)*(len(list)+1))
+    cdef arr_of_arrs result = create_arr_of_arrs(total_len, len(list))
+    result.len = len(list);
 
     cdef int current_count = 0
     for i in range(len(list)):
         l = list[i]
-        start_indices[0][i] = current_count
+        result.start_indices[i] = current_count
         for j in range(len(l)):
-            result[0][current_count+j] = l[j]
+            result.data[current_count+j] = l[j]
         current_count += len(l)
-    start_indices[0][len(list)] = current_count
+    result.start_indices[len(list)] = current_count
+
+    return result
 
 cdef int* list_of_dicts_to_array(colorings, n):
     cdef int l = len(colorings)

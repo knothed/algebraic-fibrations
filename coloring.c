@@ -4,8 +4,7 @@
 
 #include <stdio.h>
 #include <stdbool.h>
-#define MAX(a,b) ((a) > (b) ? (a) : (b))
-#define MIN(a,b) ((a) < (b) ? (a) : (b))
+#include "utils.h"
 
 /******** UPPER BOUND ON NUMBER OF COLORS ********/
 
@@ -15,13 +14,13 @@ int log2_int(int a);
 // legal_states only contains non-redundant legal states from 0 to 2^(n-1).
 // cliques only contains cliques of size 2 or more.
 // cliques_start_indices must contain cliques_count+1 entries, the first being 0 and the last being the total size of the continuous cliques array.
-int max_possible_colors(int n, int* cliques, int* cliques_start_indices, int cliques_count, int* legal_states, int legal_count) {
+int max_possible_colors(int n, arr_of_arrs cliques, int* legal_states, int legal_count) {
     // 1-clique check (number of legal states)
     int upper_bound = log2_int(legal_count) + 1;
     int p = upper_bound;
 
-    for (int i=0; i<cliques_count; i++) {
-        int size = cliques_start_indices[i+1]-cliques_start_indices[i];
+    for (int i=0; i<cliques.len; i++) {
+        int size = arr_size(cliques,i);
         int max = 1<<(size-1);
         int counts[max];
         memset(counts,0,max*sizeof(int));
@@ -30,7 +29,7 @@ int max_possible_colors(int n, int* cliques, int* cliques_start_indices, int cli
         for (int j=0; j<legal_count; j++) {
             int bits = 0;
             for (int b=0; b<size; b++) {
-                bits += ((legal_states[j] >> b) & 1) * (1<<b); // check if bit b is set in legal_states[j]
+                bits += ((legal_states[j] >> arr_get(cliques,i,b)) & 1) * (1<<b); // check if bit b is set in legal_states[j]
             }
 
             if (bits >= max)
@@ -45,6 +44,9 @@ int max_possible_colors(int n, int* cliques, int* cliques_start_indices, int cli
 
         upper_bound = MIN(upper_bound, log2_int(min << size));
     }
+
+    if (upper_bound < p)
+        printf("Reduced from %d to %d!\n", p, upper_bound);
 
     return upper_bound;
 }
