@@ -3,6 +3,13 @@ from libc.stdlib cimport malloc, realloc, free
 
 #### GRAPH FIBERING ####
 
+def is_hyperbolic(g):
+    cdef int n = g.order()
+    cdef int* adj = list_to_array(g.adjacency_matrix()._list())
+    res = is_graph_hyperbolic(n,adj);
+    free(adj)
+    return res
+
 def graph_fiberings(g, max_cols=None, verbose=True):
     cdef int n = g.order()
     cdef int* adj = list_to_array(g.adjacency_matrix()._list())
@@ -90,7 +97,8 @@ cdef extern from "legal.c":
     bint is_state_legal(int n, int* adj_matrix, int state)
     int* find_legal_orbits(int n, int* coloring, int* legal_states, int num_states, int* result_count)
 
-cdef extern from "isom.c":
+cdef extern from "graph.c":
+    bint is_graph_hyperbolic(int n, int* adj)
     int* get_isometries(int n, int* adj, int* result_count)
 
 def time_ms():
