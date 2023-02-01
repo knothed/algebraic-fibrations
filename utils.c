@@ -58,3 +58,57 @@ void print_arr(arr_of_arrs arr) {
     }
     printf("}\n");
 }
+
+
+/******** COMBINATORICS ********/
+
+void permute(int *subset, int start, int k, int* res, int* count);
+void subset_helper(int *subset, int n, int k, int index, int start, int* res, int* count);
+void swap(int *a, int *b);
+
+// Calculate (n choose k) * k!.
+int ordered_choose_count(int n, int k) {
+    int result = 1;
+    for (int i=n; i>n-k; i--)
+        result *= i;
+    return result;
+}
+
+// Fill the given array with all (n choose k) * k! options of choosing k numbers of 0..<n in an ordered fashion.
+void ordered_choose(int n, int k, int* res) {
+    int subset[k];
+    int count = 0;
+    subset_helper(subset,n,k,0,0,res,&count);
+}
+
+void permute(int *subset, int start, int k, int* res, int* count) {
+    if (start == k) {
+        memcpy(res+k*(*count),subset,k*sizeof(int));
+        (*count)++;
+        return;
+    }
+
+    for (int i=start; i<k; i++) {
+        swap(subset+start, subset+i);
+        permute(subset,start+1,k,res,count);
+        swap(subset+start, subset+i);
+    }
+}
+
+void subset_helper(int *subset, int n, int k, int index, int start, int* res, int* count) {
+    if (index == k) { // generate all permutations of subset
+        permute(subset,0,k,res,count);
+        return;
+    }
+
+    for (int i=start; i<n; i++) {
+        subset[index] = i;
+        subset_helper(subset,n,k,index+1,i+1,res,count);
+    }
+}
+
+void swap(int *a, int *b) {
+    int tmp = *a;
+    *a = *b;
+    *b = tmp;
+}

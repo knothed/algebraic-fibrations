@@ -1,7 +1,56 @@
 from sage.all import *
-from libc.stdlib cimport malloc, realloc, free
+from libc.stdlib cimport malloc, free
 
 #### GRAPH FIBERING ####
+
+def related(g,c1,c2):
+    cdef int n = g.order()
+    cdef int* adj = list_to_array(g.adjacency_matrix()._list())
+
+    # Isometries
+    cdef int isos_count = 0
+    cdef int* isos = get_isometries(n, adj, &isos_count)
+
+    c = max(c1)+1
+    cdef int* col1 = list_to_array(c1)
+    cdef int* col2 = list_to_array(c2)
+    cdef bint r = 0
+    cdef int i=0
+    for i in range(isos_count):
+        r = is_color_permutation_iso(n, c, col1, col2, isos+n*i);
+        if r == 1:
+            return True
+    return False
+
+def colorings(g,c,new):
+    cdef int n = g.order()
+    cdef int* adj = list_to_array(g.adjacency_matrix()._list())
+
+    # Isometries
+    cdef int isos_count = 0
+    cdef int* isos = get_isometries(n, adj, &isos_count)
+
+    # Colorings: max #colors
+    from sage.graphs.cliquer import all_cliques
+    cliques_py = sorted(list(all_cliques(g,min_size=2)), key=len, reverse=True)
+    cdef arr_of_arrs cliques = list_of_variable_length_lists_to_array(cliques_py)
+    cdef arr_of_arrs partitions = cliquewise_vertex_partition(n, cliques);
+
+    cdef int col_count = 0
+    cdef int* cols
+    cdef int reduced_count = 0
+    cdef int* reduced_cols
+
+    if new:
+        cols = find_all_colorings(n, adj, c, partitions, &col_count)
+        reduced_cols = kill_permutations_and_isos(n,c,cols,col_count,isos,isos_count,&reduced_count)
+        return list_from_array(reduced_cols, reduced_count*n)
+    else:
+        from sage.graphs.graph_coloring import all_graph_colorings
+        cols_py = list(all_graph_colorings(g,c,vertex_color_dict=True))
+        cols = list_of_dicts_to_array(cols_py,n)
+        reduced_cols = kill_permutations_and_isos(n,c,cols,len(cols_py),isos,isos_count,&reduced_count)
+        return list_from_array(reduced_cols, reduced_count*n)
 
 def is_hyperbolic(g):
     cdef int n = g.order()
@@ -31,6 +80,7 @@ def graph_fiberings(g, max_cols=None, verbose=True):
     if verbose: now = time_ms()
     cliques_py = sorted(list(all_cliques(g,min_size=2)), key=len, reverse=True)
     cdef arr_of_arrs cliques = list_of_variable_length_lists_to_array(cliques_py)
+    cdef arr_of_arrs partitions = cliquewise_vertex_partition(n, cliques);
     if verbose: print(f"Convert {len(cliques_py)} cliques to C: took {time_ms()-now} ms")
 
     if verbose: now = time_ms()
@@ -42,19 +92,16 @@ def graph_fiberings(g, max_cols=None, verbose=True):
     if verbose: print(f"#colors: between {cmin} and {cmax}")
 
     # Colorings: all colorings of specific #colors
-    cdef int i, c, reduced_count, orbit_count = 0
+    cdef int i, c, col_count, reduced_count, orbit_count = 0
     cdef int* cols
     cdef int* reduced_cols
     cdef int* orbit
     fibered = False
     for c in range(cmin,cmax+1):
         # Get all colorings and reduce by color swapping and graph isometries
-        from sage.graphs.graph_coloring import all_graph_colorings
         if verbose: now = time_ms()
-        cols_py = list(all_graph_colorings(g,c,vertex_color_dict=True))
-        cols = list_of_dicts_to_array(cols_py,n)
-        reduced_count = 0
-        reduced_cols = kill_permutations_and_isos(n,c,cols,len(cols_py),isos,isos_count,&reduced_count)
+        cols = find_all_colorings(n, adj, c, partitions, &col_count)
+        reduced_cols = kill_permutations_and_isos(n,c,cols,col_count,isos,isos_count,&reduced_count)
 
         # Find legal orbits
         for i in range(reduced_count):
@@ -63,17 +110,17 @@ def graph_fiberings(g, max_cols=None, verbose=True):
             if (orbit_count > 0):
                 print(f"found legal orbit! col: {list_from_array(reduced_cols+n*i,n)}, states: {list_from_array(orbit,orbit_count)}")
                 fibered = True
-
+            free(orbit)
         if verbose: print(f"Checking colorings with {c} colors: took {time_ms()-now} ms")
 
         free(cols)
         free(reduced_cols)
-        free(orbit)
 
     free(adj)
     free(legal_states)
     free(isos)
     free_arr(cliques)
+    free_arr(partitions)
 
     return fibered
 
@@ -89,7 +136,10 @@ cdef extern from "utils.c":
     void print_arr(arr_of_arrs arr)
 
 cdef extern from "coloring.c":
+    bint is_color_permutation_iso(int n, int c, int* col1, int* col2, int* f)
     int max_possible_colors(int n, arr_of_arrs cliques, int* legal_states, int legal_count)
+    arr_of_arrs cliquewise_vertex_partition(int n, arr_of_arrs cliques)
+    int* find_all_colorings(int n, int* adj, int num_cols, arr_of_arrs partitions, int* result_count)
     int* kill_permutations_and_isos(int n, int num_cols, int* cols, int cols_count, int* isos, int isos_count, int* result_count)
 
 cdef extern from "legal.c":

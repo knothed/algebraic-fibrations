@@ -23,4 +23,10 @@ arr_of_arrs arr_append(arr_of_arrs arr, int* src, int n);
 void free_arr(arr_of_arrs arr);
 void print_arr(arr_of_arrs arr);
 
+/******** COMBINATORICS ********/
+
+int ordered_choose_count(int n, int k);
+void ordered_choose(int n, int k, int* res);
+
+
 #endif

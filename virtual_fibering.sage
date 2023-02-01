@@ -1,12 +1,13 @@
 from sage.graphs.graph_coloring import *
 
-def check_all_graphs_c(n,add=2,verbose=True):
+def check_all_graphs_c(n,add=2,verbose=True,hyper=False):
     i = 0
     for g in graphs(n):
         i += 1
         n = time_ms()
         if verbose: print(f'{i}:')
         if not precheck(g): continue
+        if hyper and not is_hyperbolic(g): continue
         if graph_fiberings(g, max_cols=g.chromatic_number()+add-1, verbose=verbose): yield g
         if verbose: print(f'{i} took {time_ms()-n} ms')
 
@@ -57,7 +58,6 @@ def graph_fibers(g,col_tries=2,verbose=True):
             i += 1
         if verbose: print(f'checking the {c}-colorings: {now()-t4}ms')
 
-
 # the (half-)orbit of a coloring on a state which is represented as a number in 0 ..< 2^(n-1).
 # vertex n is never in the orbit.
 def get_orbit_nat(n,col,num_colours,i):
@@ -75,10 +75,34 @@ def get_orbit_nat(n,col,num_colours,i):
 
     return orbit
 
+######## CONCRETE GRAPHS ########
+
+# Create a löbell graph.
+# layer 0: 2 outer vertices. layers 1+2: k+k inner verteices.
+def löbell_graph(k):
+    g = Graph()
+
+    # convert from tuple (layer,vertex) to int
+    def c(l,v):
+        return v + [0,2,k+2][l]
+
+    # layer 0 inward
+    for i in range(k):
+        g.add_edge(c(0,0), c(1,i))
+        g.add_edge(c(0,1), c(2,i))
+    # inside layers 1 and 2
+        g.add_edge(c(1,i), c(1,(i+1)%k))
+        g.add_edge(c(2,i), c(2,(i+1)%k))
+    # between layer 1 and 2
+    for i in range(k):
+        g.add_edge(c(1,i), c(2,i))
+        g.add_edge(c(1,i), c(2,(i+1)%k))
+
+    return g
 
 ######## GRAPH PROPERTIES ########
 
-def is_hyperbolic(g):
+def is_hyperbolic_old(g):
     cycles = g.to_directed().all_simple_cycles(max_length=4)
     tris = list(map(set, filter(lambda c: len(c)==4, cycles)))
     quads = map(set, filter(lambda c: len(c)==5, cycles))
@@ -86,8 +110,8 @@ def is_hyperbolic(g):
         for tri in tris:
             if tri <= quad: break
         else:
-            return false
-    return true
+            return False
+    return True
 
 def curv2(g):
     return 1-g.order()/2+g.size()/4
