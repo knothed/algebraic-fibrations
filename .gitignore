@@ -2,6 +2,7 @@
 # Edit at https://www.toptal.com/developers/gitignore?templates=c,python,visualstudiocode
 
 .DS_STORE
+bridge.c
 
 ### C ###
 # Prerequisites
