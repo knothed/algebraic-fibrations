@@ -63,11 +63,12 @@ int log2_int(int a) {
 
 // Greedily convert the list of cliques into a vertex partition such that every partition set is a clique.
 // The given cliques must be sorted by length in a descending order.
+// Attention: for performance reasons when coloring, just return the first clique, the other vertices are returned as singletons.
 arr_of_arrs cliquewise_vertex_partition(int n, arr_of_arrs cliques) {
     arr_of_arrs partition = create_arr_of_arrs(n,n);
     int current_count = 0;
 
-    for (int i=0; i<1; i++) {
+    for (int i=0; i<1; i++) { // just get a single largest clique
     //for (int i=0; i<cliques.len; i++) {
         int clique_size = arr_size(cliques,i);
         int clique_overlaps = false;
@@ -123,6 +124,7 @@ int* find_all_colorings_impl(int n, int* adj, int num_cols, int used_cols, arr_o
 // Find all graph colorings with num_cols colors, using the given cliquewise vertex partition for more efficiency.
 // Because the colors of one largest clique are fixed, the returned colorings are all pairwise non-equivalent under color relabeling.
 // The given cliques must be sorted by length in a descending order.
+// Precondition: num_cols <= 32.
 int* find_all_colorings(int n, int* adj, int num_cols, arr_of_arrs partition, int* result_count) {
     int size_guess = 100;
     int* result = (int*)malloc(size_guess*n*sizeof(int));
@@ -130,11 +132,7 @@ int* find_all_colorings(int n, int* adj, int num_cols, arr_of_arrs partition, in
 
     int current_col[n];
     for (int i=0; i<n; i++) current_col[i] = -1;
-    // memset(current_col,0,n*sizeof(int));
     return find_all_colorings_impl(n, adj, num_cols, 0, partition, result, result_count, current_col, 0);
-}
-
-void printk(char* format,...) {
 }
 
 int* find_all_colorings_impl(int n, int* adj, int num_cols, int used_cols, arr_of_arrs partition, int* result, int* result_count, int current_coloring[], int level) {
@@ -152,18 +150,7 @@ int* find_all_colorings_impl(int n, int* adj, int num_cols, int used_cols, arr_o
     int clique_size = arr_size(partition,level);
     int remaining = n-partition.start_indices[level+1];
 
-    printk("LEVEL: %d\n",level);
-    printk("current col: ");
-    for (int i=0; i<n; i++)
-        printk("%d ",current_coloring[i]);
-    printk("\n");
-
-    printk("current clique: ");
-    for (int i=0; i<clique_size; i++)
-        printk("%d ",arr_get(partition,level,i));
-    printk("\n");
-
-    // Special handling for first clique: fix a single coloring of the clique to eliminate color swapping symmetry
+    // very first clique
     if (level == 0) {
         if (clique_size > num_cols || num_cols > n)
             return result;
@@ -180,99 +167,85 @@ int* find_all_colorings_impl(int n, int* adj, int num_cols, int used_cols, arr_o
 
     for (int new_cols=min_new_cols; new_cols<=max_new_cols; new_cols++) {
         // choose new_cols vertices which get a new color
-        int count = ordered_choose_count(clique_size, new_cols);
+        int count = choose(clique_size, new_cols);
         int new_col_verts[count*new_cols];
-        ordered_choose(clique_size, new_cols, new_col_verts);
-        printk("count: %d\n", count);
+        do_choose(clique_size, new_cols, new_col_verts);
 
         // go through all options
         for (int i=0; i<count; i++) {
-            int used[new_cols];
+            int used_indices[new_cols];
 
-            // apply choosing to coloring
+            // apply subset to coloring
             for (int j=0; j<new_cols; j++) {
-                int v = arr_get(partition,level,new_col_verts[i*new_cols+j]);
+                int idx = new_col_verts[i*new_cols+j];
+                used_indices[j]=idx;
+                int v = arr_get(partition,level,idx);
                 current_coloring[v] = used_cols+j;
-                used[j]=v;
             }
 
-            printk("new_cols: %d\n", new_cols);
-            printk("new_col_verts: ");
-            for (int j=0; j<new_cols; j++)
-                printk("%d ", new_col_verts[i*new_cols+j]);
-            printk("\n");
-
-            // enumerate the remaining vertices
-            // todo: sort used and use bin search
-            int nverts = clique_size-new_cols;
-            int remaining[nverts];
-            int c=0;
+            // find the remaining vertices
+            // we use that `choose` always returns the k numbers in a sorted fashion
+            int rem_count = clique_size-new_cols;
+            int remaining_indices[rem_count];
+            int c1=0;
+            int c2=0;
             for (int i=0; i<clique_size; i++) {
-                int v = arr_get(partition,level,i);
-                bool is_used = false;
-                for (int j=0; j<new_cols; j++) {
-                    if (v == used[j]) {
-                        is_used = true;
+                if (used_indices[c1] == i) {
+                    c1++;
+                } else {
+                    remaining_indices[c2] = i;
+                    c2++;
+                }
+            }
+
+            // store the forbidden colors for each remaining vertex in a bitset (this means: max colors = 32)
+            int forbidden[rem_count];
+            memset(forbidden,0,rem_count*sizeof(int));
+            for (int r=0; r<rem_count; r++) {
+                int v = arr_get(partition,level,remaining_indices[r]);
+                for (int k=0; k<n; k++) {
+                    if (adj[n*v+k] && current_coloring[k] >= 0)
+                        forbidden[r] |= (1<<current_coloring[k]);
+                }
+            }
+
+            // choose and distribute clique_size-new_cols used colors to the remaining vertices
+            int count = ordered_choose(used_cols, rem_count);
+            int remaining_vert_cols[count*rem_count];
+            do_ordered_choose(used_cols, rem_count, remaining_vert_cols);
+
+            // go through all options
+            for (int i=0; i<count; i++) {
+                // legality check
+                bool valid = true;
+                for (int r=0; r<rem_count; r++) {
+                    int c = remaining_vert_cols[i*rem_count+r];
+                    if ((forbidden[r] >> c) & 1) {
+                        valid = false;
                         goto out;
                     }
                 }
                 out:
-                if (!is_used) {
-                    remaining[c] = v;
-                    c++;
-                }
-            }
-            printk("remaining: ");
-            for (int i=0; i<nverts; i++)
-                printk("%d ",remaining[i]);
-            printk("\n");
+                if (!valid)
+                    continue;
 
-            // choose and distribute clique_size-new_cols used colors to the remaining vertices
-            int count = ordered_choose_count(used_cols, nverts);
-            int remaining_vert_cols[count*nverts];
-            ordered_choose(used_cols, nverts, remaining_vert_cols);
-            printk("count2: %d,%d\n", count,nverts);
-
-            // go through all options
-            for (int i=0; i<count; i++) {
                 int new_col[n];
                 memcpy(new_col,current_coloring,n*sizeof(int));
 
                 // apply choosing to coloring
-                for (int j=0; j<nverts; j++) {
-                    int v = remaining[j];
-                    new_col[v] = remaining_vert_cols[i*nverts+j];
+                for (int j=0; j<rem_count; j++) {
+                    int v = arr_get(partition,level,remaining_indices[j]);
+                    new_col[v] = remaining_vert_cols[i*rem_count+j];
                 }
 
-                printk("remaining_vert_cols: ");
-                for (int j=0; j<nverts; j++)
-                    printk("%d ", remaining_vert_cols[i*nverts+j]);
-                printk("\n");
+                result = find_all_colorings_impl(n, adj, num_cols, used_cols+new_cols, partition, result, result_count, new_col, level+1);
+            }
 
-                // check whether coloring is valid on these vertices
-                // todo: improve efficiency; move in for loop
-                bool valid = true;
-                for (int j=0; j<nverts; j++) {
-                    int v = remaining[j];
-                    for (int k=0; k<n; k++) {
-                        if (adj[n*v+k] & new_col[v]==new_col[k]) {
-                            valid = false;
-                            goto exit;
-                        }
-                    }
-                }
-                exit:
-                printk("coloring: ");
-                for (int i=0; i<n; i++)
-                    printk("%d ",new_col[i]);
-                printk("\n");
-                printk("valid: %d\n",valid);
-
-                if (valid) {
-                    // copy again??
-                    result = find_all_colorings_impl(n, adj, num_cols, used_cols+new_cols, partition, result, result_count, new_col, level+1);
-                    printk("Continue with level %d\n",level);
-                }
+            // undo coloring
+            for (int j=0; j<new_cols; j++) {
+                int idx = new_col_verts[i*new_cols+j];
+                int v = arr_get(partition,level,idx);
+                current_coloring[v] = -1;
             }
         }
     }

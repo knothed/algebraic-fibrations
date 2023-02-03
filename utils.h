@@ -4,6 +4,9 @@
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 
+#include <stdio.h>
+#include <stdbool.h>
+
 /******** ARRAY OF ARRAYS OF DIFFERENT LENGTHS ********/
 
 // An arr_of_arrs is a 2D array (of ints) whose entries have not necessarily the same length.
@@ -25,8 +28,9 @@ void print_arr(arr_of_arrs arr);
 
 /******** COMBINATORICS ********/
 
-int ordered_choose_count(int n, int k);
-void ordered_choose(int n, int k, int* res);
-
+int choose(int n, int k);
+int ordered_choose(int n, int k);
+void do_choose(int n, int k, int* res);
+void do_ordered_choose(int n, int k, int* res);
 
 #endif
