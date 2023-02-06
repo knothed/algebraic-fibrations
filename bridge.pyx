@@ -1,90 +1,68 @@
 from sage.all import *
 from libc.stdlib cimport malloc, free
 
+import numpy as np
+cimport numpy as np
+np.import_array()
+import ctypes
+
 #### GRAPH FIBERING ####
 
-def related(g,c1,c2):
+def colorings(g,c):
     cdef int n = g.order()
-    cdef int* adj = list_to_array(g.adjacency_matrix()._list())
+    cdef arr2d_fixed adj = arrf_from_adj_matrix(g.adjacency_matrix())
 
     # Isometries
-    cdef int isos_count = 0
-    cdef int* isos = get_isometries(n, adj, &isos_count)
-
-    c = max(c1)+1
-    cdef int* col1 = list_to_array(c1)
-    cdef int* col2 = list_to_array(c2)
-    cdef bint r = 0
-    cdef int i=0
-    for i in range(isos_count):
-        r = is_color_permutation_iso(n, c, col1, col2, isos+n*i);
-        if r == 1:
-            return True
-    return False
-
-def colorings(g,c,new):
-    cdef int n = g.order()
-    cdef int* adj = list_to_array(g.adjacency_matrix()._list())
-
-    # Isometries
-    cdef int isos_count = 0
-    cdef int* isos = get_isometries(n, adj, &isos_count)
+    cdef arr2d_fixed isos = get_isometries(adj)
+    #print(f"num isos: {isos.len}")
 
     # Colorings: max #colors
     from sage.graphs.cliquer import all_cliques
     cliques_py = sorted(list(all_cliques(g,min_size=2)), key=len, reverse=True)
-    cdef arr_of_arrs cliques = list_of_variable_length_lists_to_array(cliques_py)
-    cdef arr_of_arrs partitions = cliquewise_vertex_partition(n, cliques);
+    cdef arr2d_var cliques = arrv_from_nested_list(cliques_py)
+    cdef arr2d_var partitions = cliquewise_vertex_partition(n, cliques)
+    print_arrv(partitions)
 
-    cdef int col_count = 0
-    cdef int* cols
-    cdef int reduced_count = 0
-    cdef int* reduced_cols
+    now = time_ms()
+    cdef arr2d_fixed cols = find_all_colorings(adj,c,partitions)
+    print(f"found {cols.len} cols in {time_ms()-now} ms")
+    return np_array_from_arrf(cols)
 
-    if new:
-        cols = find_all_colorings(n, adj, c, partitions, &col_count)
-        reduced_cols = kill_permutations_and_isos(n,c,cols,col_count,isos,isos_count,&reduced_count)
-        return list_from_array(reduced_cols, reduced_count*n)
-    else:
-        from sage.graphs.graph_coloring import all_graph_colorings
-        cols_py = list(all_graph_colorings(g,c,vertex_color_dict=True))
-        cols = list_of_dicts_to_array(cols_py,n)
-        reduced_cols = kill_permutations_and_isos(n,c,cols,len(cols_py),isos,isos_count,&reduced_count)
-        return list_from_array(reduced_cols, reduced_count*n)
+    now = time_ms()
+    cdef arr2d_fixed reduced_cols = kill_permutations_and_isos(n,c,cols,isos)
+    print(f"reduced to {reduced_cols.len} in {time_ms()-now} ms")
+    free_arrf(cols)
+    return np_array_from_arrf(reduced_cols)
 
 def is_hyperbolic(g):
-    cdef int n = g.order()
-    cdef int* adj = list_to_array(g.adjacency_matrix()._list())
-    res = is_graph_hyperbolic(n,adj);
-    free(adj)
+    cdef arr2d_fixed adj = arrf_from_adj_matrix(g.adjacency_matrix())
+    res = is_graph_hyperbolic(adj);
+    free_arrf(adj)
     return res
 
 def graph_fiberings(g, max_cols=None, verbose=True):
     cdef int n = g.order()
-    cdef int* adj = list_to_array(g.adjacency_matrix()._list())
+    cdef arr2d_fixed adj = arrf_from_adj_matrix(g.adjacency_matrix())
 
     # Legal states
     if verbose: now = time_ms()
-    cdef int legal_count = 0
-    cdef int* legal_states = all_legal_states(n,adj,&legal_count)
-    if verbose: print(f"Get {legal_count} legal states: took {time_ms()-now} ms")
+    cdef arr2d_fixed legal_states = all_legal_states(adj)
+    if verbose: print(f"Get {legal_states.len} legal states: took {time_ms()-now} ms")
 
     # Isometries
     if verbose: now = time_ms()
-    cdef int isos_count = 0
-    cdef int* isos = get_isometries(n, adj, &isos_count)
-    if verbose: print(f"Get {isos_count} isometries: took {time_ms()-now} ms")
+    cdef arr2d_fixed isos = get_isometries(adj)
+    if verbose: print(f"Get {isos.len} isometries: took {time_ms()-now} ms")
 
     # Colorings: max #colors
     from sage.graphs.cliquer import all_cliques
-    if verbose: now = time_ms()
     cliques_py = sorted(list(all_cliques(g,min_size=2)), key=len, reverse=True)
-    cdef arr_of_arrs cliques = list_of_variable_length_lists_to_array(cliques_py)
-    cdef arr_of_arrs partitions = cliquewise_vertex_partition(n, cliques);
-    if verbose: print(f"Convert {len(cliques_py)} cliques to C: took {time_ms()-now} ms")
+    cdef arr2d_var cliques = arrv_from_nested_list(cliques_py)
+    cdef arr2d_var partitions = cliquewise_vertex_partition(n, cliques)
+    print_arrv(partitions)
 
     if verbose: now = time_ms()
-    cdef int cmax = max_possible_colors(n, cliques, legal_states, legal_count)
+    cdef int cmax = num_colors_upper_bound(n, cliques, legal_states)
     if verbose: print(f"Get {cmax} max possible colors: took {time_ms()-now} ms")
 
     cdef int cmin = g.chromatic_number()
@@ -92,124 +70,116 @@ def graph_fiberings(g, max_cols=None, verbose=True):
     if verbose: print(f"#colors: between {cmin} and {cmax}")
 
     # Colorings: all colorings of specific #colors
-    cdef int i, c, col_count, reduced_count, orbit_count = 0
-    cdef int* cols
-    cdef int* reduced_cols
-    cdef int* orbit
-    fibered = False
+    cdef int i, c = 0
+    cdef arr2d_fixed cols
+    cdef arr2d_fixed reduced_cols
+    cdef arr2d_fixed orbit
+    fibers = False
+
     for c in range(cmin,cmax+1):
         # Get all colorings and reduce by color swapping and graph isometries
         if verbose: now = time_ms()
-        cols = find_all_colorings(n, adj, c, partitions, &col_count)
-        reduced_cols = kill_permutations_and_isos(n,c,cols,col_count,isos,isos_count,&reduced_count)
+        cols = find_all_colorings(adj,c,partitions)
+        if verbose: now2 = time_ms()
+        reduced_cols = kill_permutations_and_isos(n,c,cols,isos)
+        if verbose: now3 = time_ms()
 
         # Find legal orbits
-        for i in range(reduced_count):
-            orbit_count = 0
-            orbit = find_legal_orbits(n,reduced_cols+n*i,legal_states,legal_count,&orbit_count)
-            if (orbit_count > 0):
-                print(f"found legal orbit! col: {list_from_array(reduced_cols+n*i,n)}, states: {list_from_array(orbit,orbit_count)}")
-                fibered = True
-            free(orbit)
-        if verbose: print(f"Checking colorings with {c} colors: took {time_ms()-now} ms")
+        for i in range(reduced_cols.len):
+            orbit = find_legal_orbits(n,reduced_cols.data+n*i,legal_states)
+            if (orbit.len > 0):
+                print(f"found legal orbit! col: todo, states: {np_array_from_arrf(orbit)}")
+                fibers = True
+            free_arrf(orbit)
+        if verbose:
+            print(f"Checking colorings with {c} colors: took {time_ms()-now} ms (all_cols): {now2-now}, reduce: {now3-now2}, orbits: {time_ms()-now3}")
 
-        free(cols)
-        free(reduced_cols)
+        free_arrf(cols)
+        free_arrf(reduced_cols)
 
-    free(adj)
-    free(legal_states)
-    free(isos)
-    free_arr(cliques)
-    free_arr(partitions)
+    free_arrf(adj)
+    free_arrf(legal_states)
+    free_arrf(isos)
+    free_arrv(cliques)
+    free_arrv(partitions)
 
-    return fibered
+    return fibers
 
-## TOOLS ##
-
-cdef extern from "utils.c":
-    ctypedef struct arr_of_arrs:
-        int* data
-        int* start_indices
-        int len
-    void free_arr(arr_of_arrs arr)
-    arr_of_arrs create_arr_of_arrs(int max_total_elems, int max_arrs)
-    void print_arr(arr_of_arrs arr)
-
-cdef extern from "coloring.c":
-    bint is_color_permutation_iso(int n, int c, int* col1, int* col2, int* f)
-    int max_possible_colors(int n, arr_of_arrs cliques, int* legal_states, int legal_count)
-    arr_of_arrs cliquewise_vertex_partition(int n, arr_of_arrs cliques)
-    int* find_all_colorings(int n, int* adj, int num_cols, arr_of_arrs partitions, int* result_count)
-    int* kill_permutations_and_isos(int n, int num_cols, int* cols, int cols_count, int* isos, int isos_count, int* result_count)
-
-cdef extern from "legal.c":
-    int* all_legal_states(int n, int* adj_matrix, int* result_count)
-    bint is_state_legal(int n, int* adj_matrix, int state)
-    int* find_legal_orbits(int n, int* coloring, int* legal_states, int num_states, int* result_count)
-
-cdef extern from "graph.c":
-    bint is_graph_hyperbolic(int n, int* adj)
-    int* get_isometries(int n, int* adj, int* result_count)
 
 def time_ms():
     import time
     return time.time_ns() // 1000000
 
+
+#### C IMPORTS ####
+
+cdef extern from "utils.c":
+    ctypedef struct arr2d_fixed:
+        int* data
+        int row_len
+        int len
+    void free_arrf(arr2d_fixed arr)
+    void print_arrf(arr2d_fixed arr)
+    arr2d_fixed arr2d_fixed_create_from(int* data, int row_len, int len)
+
+    ctypedef struct arr2d_var:
+        int* data
+        int* start_indices
+        int len
+    void free_arrv(arr2d_var arr)
+    void print_arrv(arr2d_var arr)
+    arr2d_var arr2d_var_create_empty(int max_total_elems, int max_len)
+    arr2d_var append_arrv(arr2d_var arr, int* src, int n)
+
+cdef extern from "coloring.c":
+    int num_colors_upper_bound(int n, arr2d_var cliques, arr2d_fixed legal_states)
+    arr2d_var cliquewise_vertex_partition(int n, arr2d_var cliques)
+    arr2d_fixed find_all_colorings(arr2d_fixed adj, int num_cols, arr2d_var partitions)
+    arr2d_fixed kill_permutations_and_isos(int n, int num_colors, arr2d_fixed cols, arr2d_fixed isos)
+
+cdef extern from "legal.c":
+    arr2d_fixed all_legal_states(arr2d_fixed adj)
+    arr2d_fixed find_legal_orbits(int n, int* coloring, arr2d_fixed legal_states)
+
+cdef extern from "graph.c":
+    bint is_graph_hyperbolic(arr2d_fixed adj)
+    arr2d_fixed get_isometries(arr2d_fixed adj)
+
+
+#### ARRAY CONVERSION ####
+
+# todo: test speed of list_to_array etc.
+
+# Convert a graph adjacency matrix into C form.
+cdef arr2d_fixed arrf_from_adj_matrix(adj):
+    cdef int n = adj.dimensions()[0]
+    cdef int* data = list_to_array(adj._list())
+    return arr2d_fixed_create_from(data,n,n)
+
+# Convert a graph adjacency matrix into C form.
+cdef arr2d_var arrv_from_nested_list(list):
+    cdef int total_len = sum([len(sub) for sub in list])
+    cdef arr2d_var res = arr2d_var_create_empty(total_len, len(list));
+    cdef int* p
+    for sub in list:
+        p = list_to_array(sub)
+        res = append_arrv(res,p,len(sub))
+        free(p)
+    return res
+
+# Convert a C array to a Python numpy array.
+cdef object np_array_from_arrf(arr2d_fixed arr):
+    cdef np.npy_intp shape[2]
+    shape[0] = <np.npy_intp> arr.len
+    shape[1] = <np.npy_intp> arr.row_len
+    ndarray = np.PyArray_SimpleNewFromData(2, shape, np.NPY_INT, <void*>arr.data)
+    np.PyArray_UpdateFlags(ndarray, ndarray.flags.num | np.NPY_OWNDATA)
+    return ndarray
+
+# Convert a list into a C array.
 cdef int* list_to_array(list):
-    cdef int l = len(list)
-    cdef int* res = <int*> malloc(l*sizeof(int))
-    for i in range(l):
-        res[i] = list[i]
-    return res
-
-cdef arr_of_arrs list_of_variable_length_lists_to_array(list):
-    cdef int total_len = 0
-    cdef int i,j
+    cdef int* arr = <int*> malloc(len(list)*sizeof(int))
+    cdef int i=0
     for i in range(len(list)):
-        total_len += len(list[i])
-
-    cdef arr_of_arrs result = create_arr_of_arrs(total_len, len(list))
-    result.len = len(list);
-
-    cdef int current_count = 0
-    for i in range(len(list)):
-        l = list[i]
-        result.start_indices[i] = current_count
-        for j in range(len(l)):
-            result.data[current_count+j] = l[j]
-        current_count += len(l)
-    result.start_indices[len(list)] = current_count
-
-    return result
-
-cdef int* list_of_dicts_to_array(colorings, n):
-    cdef int l = len(colorings)
-    cdef int* res = <int*> malloc(n*l*sizeof(int))
-    for i in range(l):
-        col = colorings[i]
-        for k,v in col.items():
-            res[n*i+k] = v
-    return res
-
-cdef int* list_of_lists_to_array(isometries, n):
-    cdef int l = len(isometries)
-    cdef int* res = <int*> malloc(n*l*sizeof(int))
-    for i in range(l):
-        for j in range(n):
-            res[n*i+j] = isometries[i][j]
-    return res
-
-cdef list_of_lists_from_array(int* cols, int num_cols, int n):
-    result = []
-    for i in range(num_cols):
-        col = []
-        for j in range(n):
-            col.append(cols[n*i+j])
-        result.append(col)
-    return result
-
-cdef list_from_array(int* cols, int n):
-    result = []
-    for i in range(n):
-        result.append(cols[i])
-    return result
+        arr[i]=list[i]
+    return arr

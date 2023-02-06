@@ -8,34 +8,38 @@
 
 /******* LEGAL STATES *******/
 
-#define MAX_VERTS 40
-bool subgraph_connected(int n, int* adj_matrix, int sub_size, int vertices[]);
-bool is_state_legal(int n, int* adj_matrix, int state);
+#define MAX_VERTS 32
+bool subgraph_connected(arr2d_fixed adj, int sub_size, int vertices[]);
+bool is_state_legal(arr2d_fixed adj, int state);
 
 // All legal states between 0 and 2^(n-1).
 // To avoid redundancy, we don't return any legal states where vertex (n-1) is set.
-int* all_legal_states(int n, int* adj_matrix, int* result_count) {
+// The result is a 2D array where each row is a single integer representing the state as a bitmask.
+arr2d_fixed all_legal_states(arr2d_fixed adj) {
+    int n = adj.len;
     int max = 1 << (n-1);
-    int* result = (int*)malloc(max*sizeof(int));
+    arr2d_fixed result = arr2d_fixed_create_empty(1,max);
     int count = 0;
 
     for (int i=1; i<max; i++) {
-        if (is_state_legal(n,adj_matrix,i)) {
-            result[count] = i;
+        if (is_state_legal(adj,i)) {
+            result.data[count] = i;
             count++;
         }
     }
 
-    *result_count = count;
+    result.len = count;
     return result;
 }
 
 // Check whether the ascending link and descending link given by the state are both connected and nonempty.
 // In other words, check whether the state is legal.
 // The graph is given by its adjacency matrix in contiguous form, n successive entries making a row.
-// The state is given as a bitset, with bits 0 to n-1 representing the vertices.
-bool is_state_legal(int n, int* adj, int state) {
-    // Read graph columns from state bitset
+// The state is given as a bitmask, with bits 0 to n-1 representing the vertices.
+bool is_state_legal(arr2d_fixed adj, int state) {
+    int n = adj.len;
+
+    // Read graph columns from state bitmask
     int asc_size = 0;
     int asc[n];
     int desc[n];
@@ -52,7 +56,7 @@ bool is_state_legal(int n, int* adj, int state) {
         return false; // subgraph is empty
 
     // Check connectedness
-    return subgraph_connected(n, adj, asc_size, asc) && subgraph_connected(n, adj, n-asc_size, desc);
+    return subgraph_connected(adj, asc_size, asc) && subgraph_connected(adj, n-asc_size, desc);
 }
 
 /******* GRAPH CONNECTEDNESS *******/
@@ -85,7 +89,7 @@ bfs_queue queue_delete(bfs_queue queue, int* v) {
     return new;
 }
 
-bool subgraph_connected(int n, int* adj, int sub_size, int vertices[]) {
+bool subgraph_connected(arr2d_fixed adj, int sub_size, int vertices[]) {
     bool visited[sub_size];
     memset(visited,0,sub_size*sizeof(bool));
 
@@ -98,7 +102,7 @@ bool subgraph_connected(int n, int* adj, int sub_size, int vertices[]) {
         queue = queue_delete(queue, &v);
         visited[v] = 1;
         for (int i=0; i<sub_size; i++) { // add adjacent unvisited vertices to queue
-            if (!visited[i] && adj[n*vertices[v]+vertices[i]]) {
+            if (!visited[i] & get_arrf(adj,vertices[v],vertices[i])) {
                 visited[i] = 1;
                 queue = queue_insert(queue, i);
             }
@@ -118,10 +122,8 @@ bool subgraph_connected(int n, int* adj, int sub_size, int vertices[]) {
 
 // Find all legal orbits from the given legal states in the given coloring.
 // The returned list contains a single legal state per legal orbit.
-int* find_legal_orbits(int n, int* coloring, int* legal_states, int num_states, int* result_count) {
-    int size_guess = 5;
-    int* result = (int*)malloc(size_guess*sizeof(int));
-    *result_count = 0;
+arr2d_fixed find_legal_orbits(int n, int* coloring, arr2d_fixed legal_states) {
+    arr2d_fixed result = arr2d_fixed_create_empty(1, 10);
 
     // Convert coloring list into vertex bitmasks
     int color_masks[n];
@@ -136,17 +138,17 @@ int* find_legal_orbits(int n, int* coloring, int* legal_states, int num_states, 
     int max_states = 1 << (n-1);
     int legal[max_states];
     memset(legal,0,max_states*sizeof(int));
-    for (int i=0; i<num_states; i++) {
-        legal[legal_states[i]] = 1;
+    for (int i=0; i<legal_states.len; i++) {
+        legal[get_arrf1d(legal_states,i)] = 1;
     }
 
     // Go through all legal states until none are left
     int idx = 0;
-    int remaining = num_states;
+    int remaining = legal_states.len;
     int orbit_size = 1 << num_cols;
 
     while (remaining >= (orbit_size >> 1)) {
-        int state = legal_states[idx];
+        int state = get_arrf1d(legal_states,idx);
         if (!legal[state]) {
             idx++;
             continue;
@@ -174,12 +176,8 @@ int* find_legal_orbits(int n, int* coloring, int* legal_states, int num_states, 
             }
         }
 
-        if (orbit_legal) {
-            result[*result_count] = state;
-            (*result_count)++;
-            if ((*result_count)%size_guess == 0)
-                result = realloc(result, ((*result_count)+size_guess)*sizeof(int));
-        }
+        if (orbit_legal)
+            result = append_arrf_single(result, state);
     }
 
     return result;

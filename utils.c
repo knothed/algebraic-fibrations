@@ -4,18 +4,86 @@
 
 #include "utils.h"
 
-arr_of_arrs create_arr_of_arrs(int max_total_elems, int max_arrs) {
-    arr_of_arrs arr;
-    arr.data = (int*)malloc(max_total_elems*sizeof(int));
-    arr.start_indices = (int*)malloc((max_arrs+1)*sizeof(int));
+/******** ARR2D_FIXED ********/
+
+arr2d_fixed arr2d_fixed_create_empty(int row_len, int len_guess) {
+    arr2d_fixed arr;
+    arr.data = malloc(len_guess*row_len*sizeof(int));
+    arr.row_len = row_len;
     arr.len = 0;
-    memset(arr.data,0,max_total_elems*sizeof(int));
-    memset(arr.start_indices,0,(max_arrs+1)*sizeof(int));
+    arr.len_guess = len_guess;
     return arr;
 }
 
-arr_of_arrs comprise_arr_of_arrs(int* data, int* start_indices, int* len) {
-    arr_of_arrs arr;
+arr2d_fixed arr2d_fixed_create_from(int* data, int row_len, int len) {
+    arr2d_fixed arr;
+    arr.data = data;
+    arr.row_len = row_len;
+    arr.len = len;
+    arr.len_guess = len;
+    return arr;
+}
+
+int get_arrf(arr2d_fixed arr, int i, int j) {
+    return arr.data[i*arr.row_len+j];
+}
+
+int get_arrf1d(arr2d_fixed arr, int i) {
+    return arr.data[i];
+}
+
+arr2d_fixed append_arrf_single(arr2d_fixed arr, int val) {
+    int p[1] = {val};
+    return append_arrf(arr, p);
+}
+
+arr2d_fixed append_arrf(arr2d_fixed arr, int* src) {
+    arr2d_fixed new = arr;
+
+    // realloc if the array is full
+    if (arr.len == arr.len_guess) {
+        int new_size = arr.len_guess + (arr.len_guess >> 1) + (arr.len_guess >> 3) + 1; // ca. phi
+        new.data = realloc(arr.data, new_size*new.row_len*sizeof(int));
+        new.len_guess = new_size;
+    }
+
+    memcpy(new.data+new.row_len*new.len, src, new.row_len*sizeof(int));
+    new.len++;
+    return new;
+}
+
+void free_arrf(arr2d_fixed arr) {
+    free(arr.data);
+}
+
+void print_arrf(arr2d_fixed arr) {
+    printf("{");
+    for (int i=0; i<arr.len; i++) {
+        if (i > 0) printf(", ");
+        printf("{");
+        for (int j=0; j<arr.row_len; j++) {
+            if (j > 0) printf(",");
+            printf("%d", get_arrf(arr,i,j));
+        }
+        printf("}");
+    }
+    printf("}\n");
+}
+
+/******** ARR2D_VAR ********/
+
+arr2d_var arr2d_var_create_empty(int max_total_elems, int max_len) {
+    arr2d_var arr;
+    arr.data = (int*)malloc(max_total_elems*sizeof(int));
+    arr.start_indices = (int*)malloc((max_len+1)*sizeof(int));
+    arr.len = 0;
+    memset(arr.data,0,max_total_elems*sizeof(int));
+    memset(arr.start_indices,0,(max_len+1)*sizeof(int));
+    return arr;
+}
+
+arr2d_var arr2d_var_create_from(int* data, int* start_indices, int len) {
+    arr2d_var arr;
     arr.data = data;
     arr.start_indices = start_indices;
     arr.len = len;
@@ -23,36 +91,41 @@ arr_of_arrs comprise_arr_of_arrs(int* data, int* start_indices, int* len) {
 }
 
 // Get the size of the i'th subarray.
-int arr_size(arr_of_arrs arr, int i) {
+int size_arrv(arr2d_var arr, int i) {
     return arr.start_indices[i+1]-arr.start_indices[i];
 }
 
 // Get the j'th element of the i'th subarray.
-int arr_get(arr_of_arrs arr, int i, int j) {
+int get_arrv(arr2d_var arr, int i, int j) {
     return arr.data[arr.start_indices[i]+j];
 }
 
-arr_of_arrs arr_append(arr_of_arrs arr, int* src, int n) {
-    arr_of_arrs new = arr;
+arr2d_var append_arrv_single(arr2d_var arr, int val) {
+    int p[1] = {val};
+    return append_arrv(arr, p, 1);
+}
+
+arr2d_var append_arrv(arr2d_var arr, int* src, int n) {
+    arr2d_var new = arr;
     memcpy(arr.data+arr.start_indices[arr.len], src, n*sizeof(int));
     new.len++;
     new.start_indices[new.len] = new.start_indices[new.len-1]+n;
     return new;
 }
 
-void free_arr(arr_of_arrs arr) {
+void free_arrv(arr2d_var arr) {
     free(arr.data);
     free(arr.start_indices);
 }
 
-void print_arr(arr_of_arrs arr) {
+void print_arrv(arr2d_var arr) {
     printf("{");
     for (int i=0; i<arr.len; i++) {
         if (i > 0) printf(", ");
         printf("{");
-        for (int j=0; j<arr_size(arr,i); j++) {
+        for (int j=0; j<size_arrv(arr,i); j++) {
             if (j > 0) printf(",");
-            printf("%d", arr_get(arr,i,j));
+            printf("%d", get_arrv(arr,i,j));
         }
         printf("}");
     }
@@ -81,17 +154,21 @@ int choose(int n, int k) {
 }
 
 // Fill the given array with all (n choose k) options of choosing k numbers of 0..<n in an unordered fashion.
-void do_choose(int n, int k, int* res) {
+// Return an arr2d_fixed which holds the given data pointer: for performance reasons, this array can be created on the caller stack.
+arr2d_fixed do_choose(int n, int k, int* ptr) {
     int subset[k];
     int count = 0;
-    subset_helper(subset,n,k,0,0,res,&count,false);
+    subset_helper(subset,n,k,0,0,ptr,&count,false);
+    return arr2d_fixed_create_from(ptr, k, choose(n,k));
 }
 
 // Fill the given array with all (n choose k) * k! options of choosing k numbers of 0..<n in an ordered fashion.
-void do_ordered_choose(int n, int k, int* res) {
+// Return an arr2d_fixed which holds the given data pointer: for performance reasons, this array can be created on the caller stack.
+arr2d_fixed do_ordered_choose(int n, int k, int* ptr) {
     int subset[k];
     int count = 0;
-    subset_helper(subset,n,k,0,0,res,&count,true);
+    subset_helper(subset,n,k,0,0,ptr,&count,true);
+    return arr2d_fixed_create_from(ptr, k, ordered_choose(n,k));
 }
 
 void permute(int *subset, int start, int k, int* res, int* count) {
