@@ -12,12 +12,12 @@ int64_t millis() {
 
 /******** ARR2D_FIXED ********/
 
-arr2d_fixed arr2d_fixed_create_empty(int row_len, int len_guess) {
+arr2d_fixed arr2d_fixed_create_empty(int row_len, int capacity) {
     arr2d_fixed arr;
-    arr.data = malloc(len_guess*row_len*sizeof(int));
+    arr.data = malloc(capacity*row_len*sizeof(int));
     arr.row_len = row_len;
     arr.len = 0;
-    arr.len_guess = len_guess;
+    arr.capacity = capacity;
     return arr;
 }
 
@@ -26,7 +26,7 @@ arr2d_fixed arr2d_fixed_create_from(int* data, int row_len, int len) {
     arr.data = data;
     arr.row_len = row_len;
     arr.len = len;
-    arr.len_guess = len;
+    arr.capacity = len;
     return arr;
 }
 
@@ -54,10 +54,10 @@ arr2d_fixed append_arrf_multiple(arr2d_fixed arr, arr2d_fixed other) {
 
     // realloc if the array is full
     new.len = arr.len + other.len;
-    while (new.len > new.len_guess)
-        new.len_guess = new.len_guess + (new.len_guess >> 1) + (new.len_guess >> 3) + 1; // ca. phi
-    if (new.len_guess > arr.len_guess)
-        new.data = realloc(new.data, new.len_guess*new.row_len*sizeof(int));
+    while (new.len > new.capacity)
+        new.capacity = new.capacity + (new.capacity >> 1) + (new.capacity >> 3) + 1; // ca. phi
+    if (new.capacity > arr.capacity)
+        new.data = realloc(new.data, new.capacity*new.row_len*sizeof(int));
 
     memcpy(new.data+new.row_len*arr.len, other.data, other.len*other.row_len*sizeof(int));
     return new;

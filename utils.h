@@ -25,14 +25,14 @@ typedef struct {
     int* data; // in total row_len * len entries
     int row_len;
     int len;
-    int len_guess; // a guess for total len that is used when successively filling the array without knowing the total rows
+    int capacity; // a guess for total len that is used when successively filling the array without knowing the total rows
 } arr2d_fixed;
-arr2d_fixed arr2d_fixed_create_empty(int row_len, int len_guess);
+arr2d_fixed arr2d_fixed_create_empty(int row_len, int capacity);
 arr2d_fixed arr2d_fixed_create_from(int* data, int row_len, int len);
 int get_arrf(arr2d_fixed arr, int i, int j); // first index by row, then by column
 int get_arrf1d(arr2d_fixed arr, int i); // get the i'th entry of the contiguous data
 arr2d_fixed append_arrf_single(arr2d_fixed arr, int val); // append a single value, given that row_len=1
-arr2d_fixed append_arrf(arr2d_fixed arr, int* src); // reallocs the data to a larger size if len_guess is exceeded
+arr2d_fixed append_arrf(arr2d_fixed arr, int* src); // reallocs the data to a larger size if capacity is exceeded
 arr2d_fixed append_arrf_multiple(arr2d_fixed arr, arr2d_fixed new); // append multiple rows to the array
 void free_arrf(arr2d_fixed arr);
 void print_arrf(arr2d_fixed arr);
