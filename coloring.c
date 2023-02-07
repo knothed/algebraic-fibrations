@@ -245,29 +245,164 @@ arr2d_fixed find_all_colorings_impl(arr2d_fixed adj, int num_cols, int used_cols
 
 /******** REDUCE COLORINGS BY ISOMETRIES ********/
 
+bool precheck(arr2d_var sp1, arr2d_var sp2, int* f);
 bool is_color_permutation_iso(int n, int c, int* col1, int* col2, int* f);
+
+typedef struct {
+    int idx;
+    int shape;
+    arr2d_var single_parts; // parts of the partition which occur only once; these are used to eliminate isometries
+} col_shape;
+
+// A numeral representation of a partition.
+// For n<24, this is injective, i.e. different partitions of n yield different numbers; for n>=24, there are few clashes.
+// todo: make this work for n>=24
+int shape(int* partition, int parts) {
+    int res = 0;
+    int pow = 0;
+
+    for (int i=parts-1; i>=0; i--) {
+        int v = partition[i];
+        if (v>1)
+            res += v << pow;
+        pow += log2_int(v)+1;
+    }
+
+    return res;
+}
+
+int cmp_shapes(const col_shape* a, const col_shape* b) {
+    return (*a).shape - (*b).shape;
+}
+
+int cmp_desc(const int* a, const int* b) {
+    return *b - *a;
+}
 
 // Reduce the array of colorings up to color swapping and graph isomorphism.
 // cols and isos are contiguous arrays; each entry (coloring or isomorphism) has n values.
 arr2d_fixed kill_permutations_and_isos(int n, int num_colors, arr2d_fixed cols, arr2d_fixed isos) {
-    arr2d_fixed result = arr2d_fixed_create_empty(n, 10);
+    if (num_colors >= 24) {
+        printf("Error: reducing colorings not yet supported for 24 colors or more");
+        exit(1);
+    }
 
-    for (int c1=0; c1<cols.len; c1++) {
-        bool is_new = 1;
-        for (int c2=0; c2<result.len; c2++) {
-            for (int f=0; f<isos.len; f++) {
-                if (is_color_permutation_iso(n, num_colors, cols.data+n*c1, result.data+n*c2, isos.data+n*f)) {
-                    is_new = 0;
+    // if there is only the identity iso, nothing can be reduced because of the way we generated the colorings
+    if (isos.len <= 1) {
+        arr2d_fixed copy = arr2d_fixed_create_empty(cols.row_len, cols.len);
+        copy = append_arrf_multiple(copy, cols);
+        return copy;
+    }
+
+    // 1. categorize colorings by their shape (i.e. partition of n)
+    col_shape shapes[cols.len];
+    for (int i=0; i<cols.len; i++) {
+        // count color occurrences to make partition of num_colors
+        int occurrences[num_colors]; // count occurrences of each color
+        int vert_occurrences[n]; // count occurrences of the color each vertex has
+        memset(occurrences,0,sizeof(int)*num_colors);
+        for (int j=0; j<n; j++)
+            occurrences[get_arrf(cols,i,j)]++;
+        for (int j=0; j<n; j++)
+            vert_occurrences[j] = occurrences[get_arrf(cols,i,j)];
+
+        qsort(occurrences,num_colors,sizeof(int),cmp_desc);
+
+        // find parts that occur only once
+        arr2d_var single_parts = arr2d_var_create_empty(n,num_colors);
+        for (int c=num_colors-1; c>=0; c--) {
+            int p = occurrences[c];
+
+            if (c != 0 && p == 1 && p != occurrences[c-1])
+                goto ones_exception; // also treat all the colors occurring once as a single part
+            if (!(c == 0 || p != occurrences[c-1]) || !(c == num_colors-1 || p != occurrences[c+1]))
+                continue;
+
+            ones_exception: if (0) {}
+            if (p == 1)
+                p = num_colors-c;
+
+            // fill verts with the vertices of the given color
+            int verts[p];
+            int ix = 0;
+            for (int j=0; j<n; j++) {
+                if (vert_occurrences[j] == occurrences[c]) {
+                    verts[ix] = j;
+                    ix++;
+                }
+            }
+            single_parts = append_arrv(single_parts, verts, p);
+        }
+
+        shapes[i] = (col_shape) { .idx = i, .shape = shape(occurrences,num_colors), .single_parts = single_parts };
+    }
+
+    qsort(shapes,cols.len,sizeof(col_shape),cmp_shapes);
+
+    // 2. only reduce colorings of the same shape
+    arr2d_fixed result = arr2d_fixed_create_empty(n, 10);
+    arr2d_fixed new_cols = arr2d_fixed_create_empty(n, 5);
+    arr2d_fixed new_col_indices = arr2d_fixed_create_empty(1, 5); // index of coloring in shapes
+    int prev_shape = -1;
+
+    int prev_shape_idx=0;
+    for (int c=0; c<cols.len; c++) {
+        // shape finished: copy new colorings of previous shape into result
+        if (c > 0 && shapes[c].shape != prev_shape) {
+            result = append_arrf_multiple(result,new_cols);
+            prev_shape_idx = c;
+            new_cols.len = 0;
+            new_col_indices.len = 0;
+        }
+        prev_shape = shapes[c].shape;
+
+        // search for equivalent colorings
+        int idx = shapes[c].idx;
+        bool is_new = true;
+
+        arr2d_var sp1 = shapes[c].single_parts;
+        for (int f=1; f<isos.len; f++) { // skip identity iso
+            for (int d=0; d<new_cols.len; d++) {
+                arr2d_var sp2 = shapes[get_arrf1d(new_col_indices,d)].single_parts;
+                if (!precheck(sp1, sp2, isos.data+n*f))
+                    continue;
+                if (is_color_permutation_iso(n, num_colors, cols.data+n*idx, new_cols.data+n*d, isos.data+n*f)) {
+                    is_new = false;
                     goto out;
                 }
             }
         }
         out:
-        if (is_new)
-            result = append_arrf(result, cols.data+n*c1);
+        if (is_new) {
+            new_cols = append_arrf(new_cols, cols.data+n*idx);
+            new_col_indices = append_arrf_single(new_col_indices,c); // todo: use int* once arrf's use chars
+        }
     }
 
+    result = append_arrf_multiple(result,new_cols);
+    free_arrf(new_cols);
     return result;
+}
+
+// check whether c2 can be a permutation of c1 under f.
+bool precheck(arr2d_var sp1, arr2d_var sp2, int* f) {
+    for (int s=0; s<sp1.len; s++) {
+        int size = size_arrv(sp1,s);
+        for (int s1=0; s1<size; s1++) {
+            int val = f[get_arrv(sp1,s,s1)];
+            bool matched = false;
+            for (int s2=0; s2<size; s2++) {
+                if (get_arrv(sp2,s,s2) == val) {
+                    matched = true;
+                    goto matched_out;
+                }
+            }
+            matched_out:
+            if (!matched)
+                return false;
+        }
+    }
+    return true;
 }
 
 // check whether c2 is some color permutation of c1 under the automorphism f.
@@ -275,12 +410,12 @@ bool is_color_permutation_iso(int n, int num_cols, int* col1, int* col2, int* f)
     int swaps[num_cols];
     memset(swaps,0,sizeof(int)*num_cols);
     for (int j=0; j<n; j++) {
-        int c2 = col2[j];
-        if (swaps[c2]) {
-            if (swaps[c2] != col1[f[j]]+1)
+        int c1 = col1[j];
+        if (swaps[c1]) {
+            if (swaps[c1] != col2[f[j]]+1)
                 return false;
         } else {
-            swaps[c2] = col1[f[j]]+1;
+            swaps[c1] = col2[f[j]]+1;
         }
     }
     return true;

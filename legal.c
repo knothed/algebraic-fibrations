@@ -160,9 +160,8 @@ arr2d_fixed find_legal_orbits(int n, int* coloring, arr2d_fixed legal_states) {
         for (int c=0; c<orbit_size; c++) {
             // Act on state
             int acted = state;
-            for (int b=0; b<num_cols; b++) {
+            for (int b=0; b<num_cols; b++)
                 acted ^= ((c >> b) & 1) * color_masks[b]; // act if bit b is set in c
-            }
 
             if (acted >= max_states)
                 continue; // I/O-symmetry of state; the negative state is in the same orbit

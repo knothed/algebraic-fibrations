@@ -1,11 +1,17 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include <stdio.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+#include <inttypes.h>
+#include <time.h>
+
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 
-#include <stdio.h>
-#include <stdbool.h>
+int64_t millis();
 
 /******** 2D ARRAY OF INTS ********/
 // We define two types of 2D arrays, i.e. arrays of arrays of ints:
@@ -27,8 +33,10 @@ int get_arrf(arr2d_fixed arr, int i, int j); // first index by row, then by colu
 int get_arrf1d(arr2d_fixed arr, int i); // get the i'th entry of the contiguous data
 arr2d_fixed append_arrf_single(arr2d_fixed arr, int val); // append a single value, given that row_len=1
 arr2d_fixed append_arrf(arr2d_fixed arr, int* src); // reallocs the data to a larger size if len_guess is exceeded
+arr2d_fixed append_arrf_multiple(arr2d_fixed arr, arr2d_fixed new); // append multiple rows to the array
 void free_arrf(arr2d_fixed arr);
 void print_arrf(arr2d_fixed arr);
+void print_arrf_row(arr2d_fixed arr, int i);
 
 // An arr2d_var is a 2D array of ints whose rows have not necessarily the same length.
 typedef struct {
@@ -44,6 +52,7 @@ arr2d_var append_arrv_single(arr2d_var arr, int val); // append a single value
 arr2d_var append_arrv(arr2d_var arr, int* src, int n);
 void free_arrv(arr2d_var arr);
 void print_arrv(arr2d_var arr);
+void print_arrv_row(arr2d_var arr, int i);
 
 /******** COMBINATORICS ********/
 

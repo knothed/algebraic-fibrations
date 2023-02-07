@@ -4,6 +4,12 @@
 
 #include "utils.h"
 
+int64_t millis() {
+    struct timespec now;
+    timespec_get(&now, TIME_UTC);
+    return ((int64_t) now.tv_sec) * 1000 + ((int64_t) now.tv_nsec) / 1000000;
+}
+
 /******** ARR2D_FIXED ********/
 
 arr2d_fixed arr2d_fixed_create_empty(int row_len, int len_guess) {
@@ -38,17 +44,22 @@ arr2d_fixed append_arrf_single(arr2d_fixed arr, int val) {
 }
 
 arr2d_fixed append_arrf(arr2d_fixed arr, int* src) {
+    arr2d_fixed other = arr2d_fixed_create_from(src, arr.row_len, 1);
+    return append_arrf_multiple(arr, other);
+}
+
+// Assumes arr.row_len == other.row_len
+arr2d_fixed append_arrf_multiple(arr2d_fixed arr, arr2d_fixed other) {
     arr2d_fixed new = arr;
 
     // realloc if the array is full
-    if (arr.len == arr.len_guess) {
-        int new_size = arr.len_guess + (arr.len_guess >> 1) + (arr.len_guess >> 3) + 1; // ca. phi
-        new.data = realloc(arr.data, new_size*new.row_len*sizeof(int));
-        new.len_guess = new_size;
-    }
+    new.len = arr.len + other.len;
+    while (new.len > new.len_guess)
+        new.len_guess = new.len_guess + (new.len_guess >> 1) + (new.len_guess >> 3) + 1; // ca. phi
+    if (new.len_guess > arr.len_guess)
+        new.data = realloc(new.data, new.len_guess*new.row_len*sizeof(int));
 
-    memcpy(new.data+new.row_len*new.len, src, new.row_len*sizeof(int));
-    new.len++;
+    memcpy(new.data+new.row_len*arr.len, other.data, other.len*other.row_len*sizeof(int));
     return new;
 }
 
@@ -66,6 +77,15 @@ void print_arrf(arr2d_fixed arr) {
             printf("%d", get_arrf(arr,i,j));
         }
         printf("}");
+    }
+    printf("}\n");
+}
+
+void print_arrf_row(arr2d_fixed arr, int i) {
+    printf("{");
+    for (int j=0; j<arr.row_len; j++) {
+        if (j > 0) printf(",");
+        printf("%d", get_arrf(arr,i,j));
     }
     printf("}\n");
 }
@@ -128,6 +148,15 @@ void print_arrv(arr2d_var arr) {
             printf("%d", get_arrv(arr,i,j));
         }
         printf("}");
+    }
+    printf("}\n");
+}
+
+void print_arrv_row(arr2d_var arr, int i) {
+    printf("{");
+    for (int j=0; j<size_arrv(arr,i); j++) {
+        if (j > 0) printf(",");
+        printf("%d", get_arrv(arr,i,j));
     }
     printf("}\n");
 }
