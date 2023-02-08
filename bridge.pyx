@@ -11,6 +11,8 @@ import ctypes
 def colorings(g,c):
     cdef int n = g.order()
     cdef arr2d_fixed adj = arrf_from_adj_matrix(g.adjacency_matrix())
+    cdef arr2d_fixed abc = arr2d_fixed_create_from(adj.data,n*n,1);
+    print_arrf(abc);
 
     # Isometries
     cdef arr2d_fixed isos = get_isometries(adj)
@@ -21,12 +23,11 @@ def colorings(g,c):
     cliques_py = sorted(list(all_cliques(g,min_size=2)), key=len, reverse=True)
     cdef arr2d_var cliques = arrv_from_nested_list(cliques_py)
     cdef arr2d_var partitions = cliquewise_vertex_partition(n, cliques)
-    print_arrv(partitions)
 
     now = time_ms()
     cdef arr2d_fixed cols = find_all_colorings(adj,c,partitions)
     print(f"found {cols.len} cols in {time_ms()-now} ms")
-    return np_array_from_arrf(cols)
+    #return np_array_from_arrf(cols)
 
     now = time_ms()
     cdef arr2d_fixed reduced_cols = kill_permutations_and_isos(n,c,cols,isos)
@@ -73,7 +74,7 @@ def graph_fiberings(g, max_cols=None, verbose=True):
     cdef int i, c = 0
     cdef arr2d_fixed cols
     cdef arr2d_fixed reduced_cols
-    cdef arr2d_fixed orbit
+    cdef arr2d_fixed orbits
     fibers = False
 
     for c in range(cmin,cmax+1):
@@ -81,21 +82,21 @@ def graph_fiberings(g, max_cols=None, verbose=True):
         if verbose: now = time_ms()
         cols = find_all_colorings(adj,c,partitions)
         if verbose: now2 = time_ms()
-        reduced_cols = kill_permutations_and_isos(n,c,cols,isos)
+        # reduced_cols = kill_permutations_and_isos(n,c,cols,isos)
         if verbose: now3 = time_ms()
 
         # Find legal orbits
-        for i in range(reduced_cols.len):
-            orbit = find_legal_orbits(n,reduced_cols.data+n*i,legal_states)
-            if (orbit.len > 0):
-                print(f"found legal orbit! col: todo, states: {np_array_from_arrf(orbit)}")
-                fibers = True
-            free_arrf(orbit)
+        orbits = find_legal_orbits(n,cols,legal_states)
+        if (orbits.len > 0):
+            print(f"found legal orbit! col: todo, states: {np_array_from_arrf(orbits)}")
+            fibers = True
+
         if verbose:
             print(f"Checking colorings with {c} colors: took {time_ms()-now} ms (all_cols): {now2-now}, reduce: {now3-now2}, orbits: {time_ms()-now3}")
 
         free_arrf(cols)
-        free_arrf(reduced_cols)
+        # free_arrf(reduced_cols)
+        free_arrf(orbits)
 
     free_arrf(adj)
     free_arrf(legal_states)
@@ -139,7 +140,7 @@ cdef extern from "coloring.c":
 
 cdef extern from "legal.c":
     arr2d_fixed all_legal_states(arr2d_fixed adj)
-    arr2d_fixed find_legal_orbits(int n, int* coloring, arr2d_fixed legal_states)
+    arr2d_fixed find_legal_orbits(int n, arr2d_fixed colorings, arr2d_fixed legal_states)
 
 cdef extern from "graph.c":
     bint is_graph_hyperbolic(arr2d_fixed adj)

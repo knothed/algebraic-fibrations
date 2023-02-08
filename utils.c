@@ -30,24 +30,6 @@ arr2d_fixed arr2d_fixed_create_from(int* data, int row_len, int len) {
     return arr;
 }
 
-int get_arrf(arr2d_fixed arr, int i, int j) {
-    return arr.data[i*arr.row_len+j];
-}
-
-int get_arrf1d(arr2d_fixed arr, int i) {
-    return arr.data[i];
-}
-
-arr2d_fixed append_arrf_single(arr2d_fixed arr, int val) {
-    int p[1] = {val};
-    return append_arrf(arr, p);
-}
-
-arr2d_fixed append_arrf(arr2d_fixed arr, int* src) {
-    arr2d_fixed other = arr2d_fixed_create_from(src, arr.row_len, 1);
-    return append_arrf_multiple(arr, other);
-}
-
 // Assumes arr.row_len == other.row_len
 arr2d_fixed append_arrf_multiple(arr2d_fixed arr, arr2d_fixed other) {
     arr2d_fixed new = arr;
@@ -110,29 +92,6 @@ arr2d_var arr2d_var_create_from(int* data, int* start_indices, int len) {
     return arr;
 }
 
-// Get the size of the i'th subarray.
-int size_arrv(arr2d_var arr, int i) {
-    return arr.start_indices[i+1]-arr.start_indices[i];
-}
-
-// Get the j'th element of the i'th subarray.
-int get_arrv(arr2d_var arr, int i, int j) {
-    return arr.data[arr.start_indices[i]+j];
-}
-
-arr2d_var append_arrv_single(arr2d_var arr, int val) {
-    int p[1] = {val};
-    return append_arrv(arr, p, 1);
-}
-
-arr2d_var append_arrv(arr2d_var arr, int* src, int n) {
-    arr2d_var new = arr;
-    memcpy(arr.data+arr.start_indices[arr.len], src, n*sizeof(int));
-    new.len++;
-    new.start_indices[new.len] = new.start_indices[new.len-1]+n;
-    return new;
-}
-
 void free_arrv(arr2d_var arr) {
     free(arr.data);
     free(arr.start_indices);
@@ -166,7 +125,7 @@ void print_arrv_row(arr2d_var arr, int i) {
 
 void permute(int *subset, int start, int k, int* res, int* count);
 void subset_helper(int *subset, int n, int k, int index, int start, int* res, int* count, bool ordered);
-void swap(int *a, int *b);
+static inline void swap(int *a, int *b);
 
 // Calculate (n choose k) * k!.
 int ordered_choose(int n, int k) {
@@ -232,7 +191,7 @@ void subset_helper(int *subset, int n, int k, int index, int start, int* res, in
     }
 }
 
-void swap(int *a, int *b) {
+static inline void swap(int *a, int *b) {
     int tmp = *a;
     *a = *b;
     *b = tmp;

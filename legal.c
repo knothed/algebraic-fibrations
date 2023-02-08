@@ -120,10 +120,32 @@ bool subgraph_connected(arr2d_fixed adj, int sub_size, int vertices[]) {
 
 /******** LEGAL ORBITS ********/
 
+static inline arr2d_fixed find_legal_orbits_single(int n, int* coloring, arr2d_fixed legal_states, bool* legal, arr2d_fixed append_result);
+
+arr2d_fixed find_legal_orbits(int n, arr2d_fixed colorings, arr2d_fixed legal_states) {
+    arr2d_fixed result = arr2d_fixed_create_empty(1, 10);
+
+    // Convert legal_states into "dictionary" for fast checking whether state is contained
+    int max_states = 1 << (n-1);
+    bool legal_dict[max_states];
+    memset(legal_dict,0,max_states*sizeof(bool));
+    for (int i=0; i<legal_states.len; i++)
+        legal_dict[get_arrf1d(legal_states,i)] = 1;
+
+    // Do each coloring
+    for (int i=0; i<colorings.len; i++) {
+        bool legal_copy[max_states];
+        memcpy(legal_copy,legal_dict,sizeof(legal_copy));
+        result = find_legal_orbits_single(n, colorings.data+n*i,legal_states,legal_copy,result);
+    }
+
+    return result;
+}
+
 // Find all legal orbits from the given legal states in the given coloring.
 // The returned list contains a single legal state per legal orbit.
-arr2d_fixed find_legal_orbits(int n, int* coloring, arr2d_fixed legal_states) {
-    arr2d_fixed result = arr2d_fixed_create_empty(1, 10);
+static inline arr2d_fixed find_legal_orbits_single(int n, int* coloring, arr2d_fixed legal_states, bool* legal, arr2d_fixed append_result) {
+    arr2d_fixed result = append_result;
 
     // Convert coloring list into vertex bitmasks
     int color_masks[n];
@@ -134,20 +156,14 @@ arr2d_fixed find_legal_orbits(int n, int* coloring, arr2d_fixed legal_states) {
         num_cols = MAX(num_cols, coloring[i]+1);
     }
 
-    // Convert legal_states into "dictionary" for fast checking whether state is contained
-    int max_states = 1 << (n-1);
-    int legal[max_states];
-    memset(legal,0,max_states*sizeof(int));
-    for (int i=0; i<legal_states.len; i++) {
-        legal[get_arrf1d(legal_states,i)] = 1;
-    }
-
     // Go through all legal states until none are left
+    int max_states = 1 << (n-1);
     int idx = 0;
     int remaining = legal_states.len;
     int orbit_size = 1 << num_cols;
+    int half_orbit_size = orbit_size >> 1;
 
-    while (remaining >= (orbit_size >> 1)) {
+    while (remaining >= half_orbit_size) {
         int state = get_arrf1d(legal_states,idx);
         if (!legal[state]) {
             idx++;
@@ -157,21 +173,27 @@ arr2d_fixed find_legal_orbits(int n, int* coloring, arr2d_fixed legal_states) {
         // Check if orbit is legal and delete it from the dictionary simultaneously
         bool orbit_legal = true;
 
+        int acted = state;
+        int binary = 0;
         for (int c=0; c<orbit_size; c++) {
-            // Act on state
-            int acted = state;
-            for (int b=0; b<num_cols; b++)
-                acted ^= ((c >> b) & 1) * color_masks[b]; // act if bit b is set in c
+            if (acted < max_states) { // I/O-symmetry of state; the negative state is in the same orbit
+                // Remove from dictionary
+                if (legal[acted]) {
+                    remaining--;
+                    legal[acted] = false;
+                } else {
+                    orbit_legal = false;
+                }
+            }
 
-            if (acted >= max_states)
-                continue; // I/O-symmetry of state; the negative state is in the same orbit
-
-            // Remove from dictionary
-            if (legal[acted]) {
-                remaining--;
-                legal[acted] = false;
+            // Act via gray code
+            if (!(c & 1)) {
+                binary ^= 1;
+                acted ^= color_masks[0];
             } else {
-                orbit_legal = false;
+                int y = binary & (~(binary-1));
+                binary ^= (y << 1);
+                acted ^= color_masks[log2_int(y)+1];
             }
         }
 
@@ -181,3 +203,55 @@ arr2d_fixed find_legal_orbits(int n, int* coloring, arr2d_fixed legal_states) {
 
     return result;
 }
+
+
+/*
+// Alternative algorithm: reduce all states into a single coset, then sort and analyze this list.
+// We need a very quick (radix) sort for this to be efficient!
+static inline arr2d_fixed find_legal_orbits_alternative(int n, int* coloring, arr2d_fixed legal_states, arr2d_fixed append_result) {
+    arr2d_fixed result = append_result;
+
+    // Convert coloring list into vertex bitmasks
+    int color_masks[n];
+    int highest_bits[n]; // position of the highest bit of each color
+    memset(color_masks,0,n*sizeof(int));
+    memset(highest_bits,~0,n*sizeof(int)); // init to -1
+    int num_cols = 0;
+    for (int i=0; i<n; i++) {
+        color_masks[coloring[i]] += (1<<i);
+        highest_bits[coloring[i]] = MAX(highest_bits[coloring[i]], i);
+        num_cols = MAX(num_cols, coloring[i]+1);
+    }
+
+    // Reduce all legal states into one equivalence class by setting all the highest bits to zero
+    int states[legal_states.len];
+
+    for (int i=0; i<legal_states.len; i++) {
+        int state = legal_states.data[i];
+        int elem = 0;
+        for (int c=0; c<num_cols; c++) {
+            if ((state >> highest_bits[c]) & 1)
+                elem |= color_masks[c];
+        }
+        states[i] = state ^ elem;
+    }
+
+    int_radix_sort(states,legal_states.len); // qsort is way too slow
+    int half_orbit_size = 1 << (num_cols-1);
+
+    int curr_state = -1;
+    int curr_state_begin = 0;
+    for (int i=0; i<legal_states.len; i++) {
+        if (states[i] != curr_state) {
+            if (i-curr_state_begin == half_orbit_size)
+                result = append_arrf_single(result, curr_state);
+            curr_state = states[i];
+            curr_state_begin = i;
+        }
+    }
+    if (legal_states.len-curr_state_begin == half_orbit_size)
+        result = append_arrf_single(result, curr_state);
+
+    return result;
+}
+*/

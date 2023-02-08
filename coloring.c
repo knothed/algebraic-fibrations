@@ -8,8 +8,6 @@
 
 /******** UPPER BOUND ON NUMBER OF COLORS ********/
 
-int log2_int(int a);
-
 // Deduce an upper bound on the number of colors for a coloring from cliques in the graph and the shape of the legal states.
 // legal_states only contains non-redundant legal states from 0 to 2^(n-1).
 // cliques only contains cliques of size 2 or more.
@@ -49,14 +47,6 @@ int num_colors_upper_bound(int n, arr2d_var cliques, arr2d_fixed legal_states) {
         printf("Reduced from %d to %d!\n", p, upper_bound);
 
     return upper_bound;
-}
-
-int log2_int(int a) {
-    if (a <= 0) return -1;
-    int r = 0;
-    int b = a;
-    while (b >>= 1) r++;
-    return r;
 }
 
 /******** FIND ALL COLORINGS ********/
@@ -271,12 +261,12 @@ int shape(int* partition, int parts) {
     return res;
 }
 
-int cmp_shapes(const col_shape* a, const col_shape* b) {
-    return (*a).shape - (*b).shape;
+int cmp_shapes(const void* a, const void* b) {
+    return (*(col_shape*)a).shape - (*(col_shape*)b).shape;
 }
 
-int cmp_desc(const int* a, const int* b) {
-    return *b - *a;
+int cmp_desc(const void* a, const void* b) {
+    return *(int*)b - *(int*)a;
 }
 
 // Reduce the array of colorings up to color swapping and graph isomorphism.

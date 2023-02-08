@@ -7,7 +7,7 @@ setup(
   ext_modules=[
     Extension('bridge',
               sources=['bridge.pyx'],
-              extra_compile_args=['-Ofast'],
+              extra_compile_args=['-Ofast', '-finline-functions'],
               language='c')
     ],
   cmdclass = {'build_ext': build_ext}
