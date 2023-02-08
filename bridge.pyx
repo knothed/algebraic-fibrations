@@ -41,39 +41,33 @@ def is_hyperbolic(g):
     free_arrf(adj)
     return res
 
-def graph_fiberings(g, max_cols=None, verbose=True):
+def graph_fiberings(g, max_cols=None, verbose=True, num_threads=1):
     cdef int n = g.order()
     cdef arr2d_fixed adj = arrf_from_adj_matrix(g.adjacency_matrix())
 
-    # Legal states
+    # Preparations
+
+    if verbose: print(f"Preparations ...")
     if verbose: now = time_ms()
+
     cdef arr2d_fixed legal_states = all_legal_states(adj)
-    if verbose: print(f"Get {legal_states.len} legal states: took {time_ms()-now} ms")
-
-    # Isometries
-    if verbose: now = time_ms()
     cdef arr2d_fixed isos = get_isometries(adj)
-    if verbose: print(f"Get {isos.len} isometries: took {time_ms()-now} ms")
 
-    # Colorings: max #colors
     from sage.graphs.cliquer import all_cliques
     cliques_py = sorted(list(all_cliques(g,min_size=2)), key=len, reverse=True)
     cdef arr2d_var cliques = arrv_from_nested_list(cliques_py)
-    cdef arr2d_var partitions = cliquewise_vertex_partition(n, cliques)
-    print_arrv(partitions)
-
-    if verbose: now = time_ms()
     cdef int cmax = num_colors_upper_bound(n, cliques, legal_states)
-    if verbose: print(f"Get {cmax} max possible colors: took {time_ms()-now} ms")
+    cdef arr2d_var partitions = cliquewise_vertex_partition(n, cliques)
 
-    cdef int cmin = g.chromatic_number()
+    cdef int cmin = 0 # g.chromatic_number() REMOVE BECAUSE SLOW!
     if max_cols is not None: cmax = min(cmax, max_cols)
-    if verbose: print(f"#colors: between {cmin} and {cmax}")
+
+    if verbose: print(f"... took {time_ms()-now} ms: {legal_states.len} legal states, {isos.len} isos; {cmin} <= #colors <= {cmax}")
 
     # Colorings: all colorings of specific #colors
+
     cdef int i, c = 0
     cdef arr2d_fixed cols
-    cdef arr2d_fixed reduced_cols
     cdef arr2d_fixed orbits
     fibers = False
 
@@ -82,20 +76,22 @@ def graph_fiberings(g, max_cols=None, verbose=True):
         if verbose: now = time_ms()
         cols = find_all_colorings(adj,c,partitions)
         if verbose: now2 = time_ms()
-        # reduced_cols = kill_permutations_and_isos(n,c,cols,isos)
+        #cols = kill_permutations_and_isos(n,c,cols,isos)
         if verbose: now3 = time_ms()
 
         # Find legal orbits
-        orbits = find_legal_orbits(n,cols,legal_states)
+        if verbose:
+            print(f"{c} colors: Testing {cols.len} colorings ...")
+        orbits = find_legal_orbits(n,cols,legal_states,num_threads)
         if (orbits.len > 0):
-            print(f"found legal orbit! col: todo, states: {np_array_from_arrf(orbits)}")
+            #np_array_from_arrf(orbits)
+            print(f"found legal orbit! col: todo, states: {orbits.len}")
             fibers = True
 
         if verbose:
-            print(f"Checking colorings with {c} colors: took {time_ms()-now} ms (all_cols): {now2-now}, reduce: {now3-now2}, orbits: {time_ms()-now3}")
+            print(f"... took {time_ms()-now} ms (all_cols): {now2-now}, reduce: {now3-now2}, orbits: {time_ms()-now3}")
 
         free_arrf(cols)
-        # free_arrf(reduced_cols)
         free_arrf(orbits)
 
     free_arrf(adj)
@@ -140,7 +136,7 @@ cdef extern from "coloring.c":
 
 cdef extern from "legal.c":
     arr2d_fixed all_legal_states(arr2d_fixed adj)
-    arr2d_fixed find_legal_orbits(int n, arr2d_fixed colorings, arr2d_fixed legal_states)
+    arr2d_fixed find_legal_orbits(int n, arr2d_fixed colorings, arr2d_fixed legal_states, int num_threads)
 
 cdef extern from "graph.c":
     bint is_graph_hyperbolic(arr2d_fixed adj)

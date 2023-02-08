@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdbool.h>
+#include <pthread.h>
 #include "utils.h"
 
 /******* LEGAL STATES *******/
@@ -122,9 +123,35 @@ bool subgraph_connected(arr2d_fixed adj, int sub_size, int vertices[]) {
 
 static inline arr2d_fixed find_legal_orbits_single(int n, int* coloring, arr2d_fixed legal_states, bool* legal, arr2d_fixed append_result);
 
-arr2d_fixed find_legal_orbits(int n, arr2d_fixed colorings, arr2d_fixed legal_states) {
-    arr2d_fixed result = arr2d_fixed_create_empty(1, 10);
+typedef struct {
+    int n;
+    arr2d_fixed legal_states;
+    bool* legal_dict;
+    arr2d_fixed colorings;
+    int start_idx;
+    int end_idx;
+    arr2d_fixed result;
+} orbit_thread_args;
 
+void* orbit_thread_enter(void* arg) {
+    orbit_thread_args args = *((orbit_thread_args*)arg);
+    arr2d_fixed result = args.result;
+
+    int n = args.n;
+    int max_states = 1 << (n-1);
+    for (int i=args.start_idx; i<=args.end_idx; i++) {
+        bool legal_copy[max_states];
+        memcpy(legal_copy,args.legal_dict,sizeof(legal_copy));
+        result = find_legal_orbits_single(n, args.colorings.data+n*i, args.legal_states, legal_copy, result);
+    }
+
+    ((orbit_thread_args*)arg)->result = result;
+}
+
+// Find all legal orbits from the given legal states in all of the given colorings.
+// If required, split up the work on multiple threads.
+// The returned list contains a single legal state per legal orbit.
+arr2d_fixed find_legal_orbits(int n, arr2d_fixed colorings, arr2d_fixed legal_states, int num_threads) {
     // Convert legal_states into "dictionary" for fast checking whether state is contained
     int max_states = 1 << (n-1);
     bool legal_dict[max_states];
@@ -132,11 +159,29 @@ arr2d_fixed find_legal_orbits(int n, arr2d_fixed colorings, arr2d_fixed legal_st
     for (int i=0; i<legal_states.len; i++)
         legal_dict[get_arrf1d(legal_states,i)] = 1;
 
-    // Do each coloring
-    for (int i=0; i<colorings.len; i++) {
-        bool legal_copy[max_states];
-        memcpy(legal_copy,legal_dict,sizeof(legal_copy));
-        result = find_legal_orbits_single(n, colorings.data+n*i,legal_states,legal_copy,result);
+    // create threads
+    pthread_t pids[num_threads];
+    orbit_thread_args args[num_threads];
+    for (int i=0; i<num_threads; i++) {
+        int from = (i*colorings.len)/num_threads;
+        int to = ((i+1)*colorings.len)/num_threads - 1;
+        args[i] = (orbit_thread_args) { .n = n, .legal_states = legal_states, .legal_dict = legal_dict, .colorings = colorings, .start_idx = from, .end_idx = to, .result = arr2d_fixed_create_empty(1, 10) };
+        if (pthread_create(&pids[i],0,&orbit_thread_enter,&args[i])) {
+            printf("error: thread couldn't be created\n");
+            exit(1);
+        }
+    }
+
+    // collect results
+    for (int i=0; i<num_threads; i++)
+        pthread_join(pids[i], 0);
+
+    int len = 0;
+    for (int i=0; i<num_threads; i++) len += args[i].result.len;
+    arr2d_fixed result = arr2d_fixed_create_empty(1, len);
+    for (int i=0; i<num_threads; i++) {
+        result = append_arrf_multiple(result, args[i].result);
+        free_arrf(args[i].result);
     }
 
     return result;
@@ -208,7 +253,7 @@ static inline arr2d_fixed find_legal_orbits_single(int n, int* coloring, arr2d_f
 /*
 // Alternative algorithm: reduce all states into a single coset, then sort and analyze this list.
 // We need a very quick (radix) sort for this to be efficient!
-static inline arr2d_fixed find_legal_orbits_alternative(int n, int* coloring, arr2d_fixed legal_states, arr2d_fixed append_result) {
+static inline arr2d_fixed find_legal_orbits_single_alternative(int n, int* coloring, arr2d_fixed legal_states, arr2d_fixed append_result) {
     arr2d_fixed result = append_result;
 
     // Convert coloring list into vertex bitmasks
