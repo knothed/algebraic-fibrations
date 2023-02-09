@@ -121,11 +121,11 @@ cdef extern from "utils.c":
 
     ctypedef struct arr2d_var:
         int* data
-        int* start_indices
+        int* end_indices
         int len
     void free_arrv(arr2d_var arr)
     void print_arrv(arr2d_var arr)
-    arr2d_var arr2d_var_create_empty(int max_total_elems, int max_len)
+    arr2d_var arr2d_var_create_empty(int total_capacity, int num_rows_capacity)
     arr2d_var append_arrv(arr2d_var arr, int* src, int n)
 
 cdef extern from "coloring.c":
@@ -135,8 +135,11 @@ cdef extern from "coloring.c":
     arr2d_fixed kill_permutations_and_isos(int n, int num_colors, arr2d_fixed cols, arr2d_fixed isos)
 
 cdef extern from "legal.c":
+    ctypedef struct legal_orbits_result:
+        arr2d_fixed colorings
+        arr2d_var states
+    legal_orbits_result find_legal_orbits(int n, arr2d_fixed colorings, arr2d_fixed legal_states, int num_threads, bint stop_after_first)
     arr2d_fixed all_legal_states(arr2d_fixed adj)
-    arr2d_fixed find_legal_orbits(int n, arr2d_fixed colorings, arr2d_fixed legal_states, int num_threads)
 
 cdef extern from "graph.c":
     bint is_graph_hyperbolic(arr2d_fixed adj)

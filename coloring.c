@@ -11,7 +11,6 @@
 // Deduce an upper bound on the number of colors for a coloring from cliques in the graph and the shape of the legal states.
 // legal_states only contains non-redundant legal states from 0 to 2^(n-1).
 // cliques only contains cliques of size 2 or more.
-// cliques_start_indices must contain cliques_count+1 entries, the first being 0 and the last being the total size of the continuous cliques array.
 int num_colors_upper_bound(int n, arr2d_var cliques, arr2d_fixed legal_states) {
     // 1-clique check (number of legal states)
     int upper_bound = log2_int(legal_states.len) + 1;
@@ -83,7 +82,8 @@ arr2d_var cliquewise_vertex_partition(int n, arr2d_var cliques) {
 
         end:
         if (!clique_overlaps) {
-            partition = append_arrv(partition,cliques.data+cliques.start_indices[i],clique_size);
+            int start_idx = (i==0) ? 0 : cliques.end_indices[i-1];
+            partition = append_arrv(partition,cliques.data+start_idx,clique_size);
             current_count += clique_size;
         }
     }
@@ -129,7 +129,7 @@ arr2d_fixed find_all_colorings_impl(arr2d_fixed adj, int num_cols, int used_cols
         return append_arrf(result, current_coloring);
 
     int clique_size = size_arrv(partition,level);
-    int remaining = n-partition.start_indices[level+1];
+    int remaining = n-partition.end_indices[level];
 
     // very first clique
     if (level == 0) {

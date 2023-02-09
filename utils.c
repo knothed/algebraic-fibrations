@@ -37,7 +37,7 @@ arr2d_fixed append_arrf_multiple(arr2d_fixed arr, arr2d_fixed other) {
     // realloc if the array is full
     new.len = arr.len + other.len;
     while (new.len > new.capacity)
-        new.capacity = new.capacity + (new.capacity >> 1) + (new.capacity >> 3) + 1; // ca. phi
+        new.capacity = phi_times(new.capacity);
     if (new.capacity > arr.capacity)
         new.data = realloc(new.data, new.capacity*new.row_len*sizeof(int));
 
@@ -74,27 +74,52 @@ void print_arrf_row(arr2d_fixed arr, int i) {
 
 /******** ARR2D_VAR ********/
 
-arr2d_var arr2d_var_create_empty(int max_total_elems, int max_len) {
+arr2d_var arr2d_var_create_empty(int total_capacity, int num_rows_capacity) {
     arr2d_var arr;
-    arr.data = (int*)malloc(max_total_elems*sizeof(int));
-    arr.start_indices = (int*)malloc((max_len+1)*sizeof(int));
+    arr.data = (int*)malloc(total_capacity*sizeof(int));
+    arr.end_indices = (int*)malloc(num_rows_capacity*sizeof(int));
     arr.len = 0;
-    memset(arr.data,0,max_total_elems*sizeof(int));
-    memset(arr.start_indices,0,(max_len+1)*sizeof(int));
+    arr.total_capacity = total_capacity;
+    arr.num_rows_capacity = num_rows_capacity;
     return arr;
 }
 
-arr2d_var arr2d_var_create_from(int* data, int* start_indices, int len) {
+arr2d_var arr2d_var_create_from(int* data, int* end_indices, int len) {
     arr2d_var arr;
     arr.data = data;
-    arr.start_indices = start_indices;
+    arr.end_indices = end_indices;
     arr.len = len;
+    arr.total_capacity = end_indices[len-1];
+    arr.num_rows_capacity = len;
     return arr;
+}
+
+arr2d_var append_arrv_multiple(arr2d_var arr, arr2d_var other) {
+    arr2d_var new = arr;
+    new.len = arr.len + other.len;
+
+    // realloc end_indices
+    while (new.len > new.num_rows_capacity)
+        new.num_rows_capacity = phi_times(new.num_rows_capacity);
+    if (new.num_rows_capacity > arr.num_rows_capacity)
+        new.end_indices = realloc(new.end_indices, new.num_rows_capacity*sizeof(int));
+
+    for (int i=0; i<other.len; i++)
+        new.end_indices[arr.len+i] = total_len_arrv(arr) + other.end_indices[i];
+
+    // realloc data
+    while (total_len_arrv(new) > new.total_capacity)
+        new.total_capacity = phi_times(new.total_capacity);
+    if (new.total_capacity > arr.total_capacity)
+        new.data = realloc(new.data, new.total_capacity*sizeof(int));
+
+    memcpy(new.data+total_len_arrv(arr), other.data, total_len_arrv(other)*sizeof(int));
+    return new;
 }
 
 void free_arrv(arr2d_var arr) {
     free(arr.data);
-    free(arr.start_indices);
+    free(arr.end_indices);
 }
 
 void print_arrv(arr2d_var arr) {
