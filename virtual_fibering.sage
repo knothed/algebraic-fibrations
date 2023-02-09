@@ -78,7 +78,7 @@ def get_orbit_nat(n,col,num_colours,i):
 ######## CONCRETE GRAPHS ########
 
 # Create a löbell graph.
-# layer 0: 2 outer vertices. layers 1+2: k+k inner verteices.
+# layer 0: 2 outer vertices. layers 1+2: k+k inner vertices.
 def löbell_graph(k):
     g = Graph()
 
@@ -99,6 +99,60 @@ def löbell_graph(k):
         g.add_edge(c(1,i), c(2,(i+1)%k))
 
     return g
+
+# Extend the löbell graph by doing "inverse" edge surgery to the hyperbolic polygon defined by it.
+# This means, when g's faces are all triangles, v is a vertex of valence >= 6, v is connected to valence >=5 vertices,
+# in particular v1 and v2, and v1-v-v2 isn't part of a 4-cycle, we replace v by a new edge and connect the two now vertices with v's neighbors
+# such that only v1 and v2 are connected to both, the others to one of them.
+# This method changes the graph by modifying the existing vertex v and adding a new vertex whose label is returned.
+def add_inoue_edges(graph, v, v1, v2):
+    # Get vertices incident to v
+    incident = graph.edges_incident(v)
+    if len(incident) < 6:
+        print(f"Error: {v} has valence < 6")
+        return None
+    for i in range(len(incident)):
+        incident[i] = incident[i][0] if incident[i][1] == v else incident[i][1]
+
+    # Sort vertices so they form a cycle
+    cycle = [incident[0]]
+    incident.remove(cycle[0])
+    while incident:
+        neighbors = list(filter(lambda x: graph.has_edge(x, cycle[-1]), incident))
+        if not neighbors:
+            print(f"Error: {v} is not center of a valid cycle")
+            return None
+        cycle.append(neighbors[0])
+        incident.remove(neighbors[0])
+
+    # Get positions of v1 and v2 in the cycle
+    try:
+        idx1 = cycle.index(v1)
+        idx2 = cycle.index(v2)
+        idx_low = min(idx1, idx2)
+        idx_hi = max(idx1, idx2)
+    except:
+        print(f"Error: both vertices {v1} and {v2} must be incident to {v}")
+        return None
+
+    n = len(cycle)
+    if (idx1 - idx2) % n < 3 or (idx2 - idx1) % n < 3:
+        print(f"Error: vertices {v1} and {v2} are too close: they must not form a 3- or 4-cycle with {v}")
+        return None
+
+    # Add new vertices to the graph
+    graph.delete_vertex(v)
+    graph.add_vertex(v)
+    new1 = v
+    new2 = graph.add_vertex()
+    graph.add_edges([(new1,new2), (new1,v1), (new1,v2), (new2,v1), (new2,v2)])
+    for i in range(idx_low+1, idx_hi):
+        graph.add_edge(new1, cycle[i])
+    for i in range(idx_hi+1, idx_low+n):
+        graph.add_edge(new2, cycle[i%n])
+
+    return new2
+
 
 ######## GRAPH PROPERTIES ########
 
