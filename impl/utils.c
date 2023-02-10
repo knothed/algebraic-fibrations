@@ -98,6 +98,8 @@ arr2d_var append_arrv_multiple(arr2d_var arr, arr2d_var other) {
     arr2d_var new = arr;
     new.len = arr.len + other.len;
 
+    int total_arr_len = total_len_arrv(arr); // realloc of new.end_indices destroys this
+
     // realloc end_indices
     while (new.len > new.num_rows_capacity)
         new.num_rows_capacity = phi_times(new.num_rows_capacity);
@@ -105,7 +107,7 @@ arr2d_var append_arrv_multiple(arr2d_var arr, arr2d_var other) {
         new.end_indices = realloc(new.end_indices, new.num_rows_capacity*sizeof(int));
 
     for (int i=0; i<other.len; i++)
-        new.end_indices[arr.len+i] = total_len_arrv(arr) + other.end_indices[i];
+        new.end_indices[arr.len+i] = total_arr_len + other.end_indices[i];
 
     // realloc data
     while (total_len_arrv(new) > new.total_capacity)
@@ -113,7 +115,7 @@ arr2d_var append_arrv_multiple(arr2d_var arr, arr2d_var other) {
     if (new.total_capacity > arr.total_capacity)
         new.data = realloc(new.data, new.total_capacity*sizeof(int));
 
-    memcpy(new.data+total_len_arrv(arr), other.data, total_len_arrv(other)*sizeof(int));
+    memcpy(new.data+total_arr_len, other.data, total_len_arrv(other)*sizeof(int));
     return new;
 }
 

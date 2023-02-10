@@ -8,7 +8,7 @@ def check_all_graphs_c(n,add=2,verbose=True,hyper=False):
         if verbose: print(f'{i}:')
         if not precheck(g): continue
         if hyper and not is_hyperbolic(g): continue
-        if graph_fiberings(g, max_cols=g.chromatic_number()+add-1, verbose=verbose): yield g
+        if has_legal_orbit(g, max_cols=g.chromatic_number()+add-1, verbose=verbose): yield g
         if verbose: print(f'{i} took {time_ms()-n} ms')
 
 def check_all_graphs(n,add=2,verbose=True):

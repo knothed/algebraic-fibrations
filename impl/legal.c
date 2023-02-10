@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include "functionality.h"
 #include "utils.h"
 
 /******* LEGAL STATES *******/
@@ -120,13 +121,6 @@ bool subgraph_connected(arr2d_fixed adj, int sub_size, int vertices[]) {
 }
 
 /******** LEGAL ORBITS ********/
-
-typedef struct {
-    // all colorings for which there are legal orbits
-    arr2d_fixed colorings;
-    // each coloring can have multiple legal orbits, so this array ontains one row per row in result_cols
-    arr2d_var states;
-} legal_orbits_result;
 
 typedef struct {
     int n;

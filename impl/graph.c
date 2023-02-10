@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdbool.h>
+#include "functionality.h"
 #include "utils.h"
 
 /******** HYPERBOLICITY ********/
@@ -59,9 +60,8 @@ arr2d_fixed get_isometries_impl(arr2d_fixed adj, arr2d_fixed isometries, int cur
     int n = adj.len;
 
     // Add isometry
-    if (level == n) {
+    if (level == n)
         return append_arrf(isometries, current_iso);
-    }
 
     // insert 'i' somewhere into current_iso
     for (int i=0; i<n; i++) {

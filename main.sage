@@ -1,6 +1,6 @@
 if False: # optimization
-    from bridge import *
+    from fibering import *
 else:
-    load('bridge.pyx')
+    load('fibering.pyx')
 load('martelli.sage')
 load('virtual_fibering.sage')

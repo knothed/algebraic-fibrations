@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdbool.h>
+#include "functionality.h"
 #include "utils.h"
 
 /******** UPPER BOUND ON NUMBER OF COLORS ********/
@@ -42,8 +43,8 @@ int num_colors_upper_bound(int n, arr2d_var cliques, arr2d_fixed legal_states) {
         upper_bound = MIN(upper_bound, log2_int(min << size));
     }
 
-    if (upper_bound < p)
-        printf("Reduced from %d to %d!\n", p, upper_bound);
+    // if (upper_bound < p)
+    //    printf("Reduced from %d to %d!\n", p, upper_bound);
 
     return upper_bound;
 }
