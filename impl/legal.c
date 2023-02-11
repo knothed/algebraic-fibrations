@@ -179,7 +179,7 @@ legal_orbits_result find_legal_orbits(int n, arr2d_fixed colorings, arr2d_fixed 
 
         if (num_threads > 1) {
             if (pthread_create(&pids[i],0,&orbit_thread_enter,&args[i])) {
-                printf("error: thread couldn't be created\n");
+                fprintf(stderr, "error: thread couldn't be created\n");
                 exit(1);
             }
         } else { // don't create a new thread but use this one for a single thread

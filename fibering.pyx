@@ -105,19 +105,48 @@ def vertices_in_state(state):
             res.append(i)
     return res
 
+# Find all colorings for a graph with exactly num_cols colors.
+# Reduce the colorings modulo color swapping and graph isometries.
+# The result is a 2D numpy array where each row represents a coloring.
+def all_reduced_colorings(g, num_cols, verbose=False):
+    cdef int n = g.order()
+    cdef arr2d_fixed adj = arrf_from_adj_matrix(g.adjacency_matrix())
+    cdef arr2d_fixed isos = get_isometries(adj)
+
+    cliques_py = sorted(list(all_cliques(g,min_size=2)), key=len, reverse=True)
+    cdef arr2d_var cliques = arrv_from_nested_list(cliques_py)
+    cdef arr2d_var partitions = cliquewise_vertex_partition(n, cliques)
+
+    if verbose: t1 = time_ms()
+    cdef arr2d_fixed cols = find_all_colorings(adj,num_cols,partitions)
+    if verbose: t2 = time_ms()
+    cdef arr2d_fixed reduced = reduce_colorings(n,num_cols,cols,isos)
+    if verbose: print(f"Found {cols.len} colorings in {t2-t1}ms; reduced to {reduced.len} unique ones in {time_ms()-t2} ms.")
+
+    free_arrf(adj)
+    free_arrf(isos)
+    free_arrv(cliques)
+    free_arrv(partitions)
+    free_arrf(cols)
+    return np_array_from_arrf(reduced)
+
+
 # ...
 
 
 #### C IMPORTS ####
 
 cdef extern from "impl/coloring.c":
-    pass # required so that coloring.c is linked by Cython
+    arr2d_var cliquewise_vertex_partition(int n, arr2d_var cliques); # todo: remove this function entirely and just focus on a single largest clique
+    arr2d_fixed find_all_colorings(arr2d_fixed adj, int num_cols, arr2d_var partitions)
+    arr2d_fixed reduce_colorings(int n, int num_colors, arr2d_fixed cols, arr2d_fixed isos)
 
 cdef extern from "impl/fibering.c":
     legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int max_cols, bint verbose, int num_threads, bint single_orbit)
 
 cdef extern from "impl/graph.c":
     bint is_graph_hyperbolic(arr2d_fixed adj)
+    arr2d_fixed get_isometries(arr2d_fixed adj)
 
 cdef extern from "impl/utils.c":
     ctypedef struct arr2d_fixed:

@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include "functionality.h"
+#include "sort_r.h"
 #include "utils.h"
 
 /******** UPPER BOUND ON NUMBER OF COLORS ********/
@@ -236,178 +237,82 @@ arr2d_fixed find_all_colorings_impl(arr2d_fixed adj, int num_cols, int used_cols
 
 /******** REDUCE COLORINGS BY ISOMETRIES ********/
 
-bool precheck(arr2d_var sp1, arr2d_var sp2, int* f);
-bool is_color_permutation_iso(int n, int c, int* col1, int* col2, int* f);
-
-typedef struct {
-    int idx;
-    int shape;
-    arr2d_var single_parts; // parts of the partition which occur only once; these are used to eliminate isometries
-} col_shape;
-
-// A numeral representation of a partition.
-// For n<24, this is injective, i.e. different partitions of n yield different numbers; for n>=24, there are few clashes.
-// todo: make this work for n>=24
-int shape(int* partition, int parts) {
-    int res = 0;
-    int pow = 0;
-
-    for (int i=parts-1; i>=0; i--) {
-        int v = partition[i];
-        if (v>1)
-            res += v << pow;
-        pow += log2_int(v)+1;
-    }
-
-    return res;
-}
-
-int cmp_shapes(const void* a, const void* b) {
-    return (*(col_shape*)a).shape - (*(col_shape*)b).shape;
-}
-
-int cmp_desc(const void* a, const void* b) {
-    return *(int*)b - *(int*)a;
-}
+static inline void make_canonical_form(int n, int* coloring, int num_cols, arr2d_fixed isos);
+int cmp_lexicographic(const void* a, const void* b, void* arg);
 
 // Reduce the array of colorings up to color swapping and graph isomorphism.
-// cols and isos are contiguous arrays; each entry (coloring or isomorphism) has n values.
-arr2d_fixed kill_permutations_and_isos(int n, int num_colors, arr2d_fixed cols, arr2d_fixed isos) {
-    if (num_colors >= 24) {
-        printf("Error: reducing colorings not yet supported for 24 colors or more");
-        exit(1);
-    }
-
-    // if there is only the identity iso, nothing can be reduced because of the way we generated the colorings
+arr2d_fixed reduce_colorings(int n, int num_colors, arr2d_fixed cols, arr2d_fixed isos) {
+    // If there is only the identity iso, nothing can be reduced because of the way we generated the colorings
     if (isos.len <= 1) {
         arr2d_fixed copy = arr2d_fixed_create_empty(cols.row_len, cols.len);
         copy = append_arrf_multiple(copy, cols);
         return copy;
     }
 
-    // 1. categorize colorings by their shape (i.e. partition of n)
-    col_shape shapes[cols.len];
+    // 1. Bring all colorings into a canonical form: the form obtained by color swapping and graph isos which is lexicographically lowest.
+    int64_t a = millis();
+    for (int i=0; i<cols.len; i++)
+        make_canonical_form(n, cols.data+n*i, num_colors, isos);
+
+    int64_t b = millis();
+    sort_r(cols.data, cols.len, n*sizeof(int), cmp_lexicographic, &n);
+    printf("can. form took %lld ms, sorting took %lld ms\n", b-a, millis()-b);
+
+    // 2. Remove multiples from the colorings list
+    arr2d_fixed result = arr2d_fixed_create_empty(n, cols.len/isos.len);
+    int last_new_idx = -1;
     for (int i=0; i<cols.len; i++) {
-        // count color occurrences to make partition of num_colors
-        int occurrences[num_colors]; // count occurrences of each color
-        int vert_occurrences[n]; // count occurrences of the color each vertex has
-        memset(occurrences,0,sizeof(int)*num_colors);
-        for (int j=0; j<n; j++)
-            occurrences[get_arrf(cols,i,j)]++;
-        for (int j=0; j<n; j++)
-            vert_occurrences[j] = occurrences[get_arrf(cols,i,j)];
-
-        qsort(occurrences,num_colors,sizeof(int),cmp_desc);
-
-        // find parts that occur only once
-        arr2d_var single_parts = arr2d_var_create_empty(n,num_colors);
-        for (int c=num_colors-1; c>=0; c--) {
-            int p = occurrences[c];
-
-            if (c != 0 && p == 1 && p != occurrences[c-1])
-                goto ones_exception; // also treat all the colors occurring once as a single part
-            if (!(c == 0 || p != occurrences[c-1]) || !(c == num_colors-1 || p != occurrences[c+1]))
-                continue;
-
-            ones_exception: if (0) {}
-            if (p == 1)
-                p = num_colors-c;
-
-            // fill verts with the vertices of the given color
-            int verts[p];
-            int ix = 0;
-            for (int j=0; j<n; j++) {
-                if (vert_occurrences[j] == occurrences[c]) {
-                    verts[ix] = j;
-                    ix++;
-                }
-            }
-            single_parts = append_arrv(single_parts, verts, p);
-        }
-
-        shapes[i] = (col_shape) { .idx = i, .shape = shape(occurrences,num_colors), .single_parts = single_parts };
-    }
-
-    qsort(shapes,cols.len,sizeof(col_shape),cmp_shapes);
-
-    // 2. only reduce colorings of the same shape
-    arr2d_fixed result = arr2d_fixed_create_empty(n, 10);
-    arr2d_fixed new_cols = arr2d_fixed_create_empty(n, 5);
-    arr2d_fixed new_col_indices = arr2d_fixed_create_empty(1, 5); // index of coloring in shapes
-    int prev_shape = -1;
-
-    int prev_shape_idx=0;
-    for (int c=0; c<cols.len; c++) {
-        // shape finished: copy new colorings of previous shape into result
-        if (c > 0 && shapes[c].shape != prev_shape) {
-            result = append_arrf_multiple(result,new_cols);
-            prev_shape_idx = c;
-            new_cols.len = 0;
-            new_col_indices.len = 0;
-        }
-        prev_shape = shapes[c].shape;
-
-        // search for equivalent colorings
-        int idx = shapes[c].idx;
-        bool is_new = true;
-
-        arr2d_var sp1 = shapes[c].single_parts;
-        for (int f=1; f<isos.len; f++) { // skip identity iso
-            for (int d=0; d<new_cols.len; d++) {
-                arr2d_var sp2 = shapes[get_arrf1d(new_col_indices,d)].single_parts;
-                if (!precheck(sp1, sp2, isos.data+n*f))
-                    continue;
-                if (is_color_permutation_iso(n, num_colors, cols.data+n*idx, new_cols.data+n*d, isos.data+n*f)) {
-                    is_new = false;
-                    goto out;
-                }
-            }
-        }
-        out:
-        if (is_new) {
-            new_cols = append_arrf(new_cols, cols.data+n*idx);
-            new_col_indices = append_arrf_single(new_col_indices,c); // todo: use int* once arrf's use chars
+        if (last_new_idx < 0 || cmp_lexicographic(cols.data+n*i, cols.data+n*last_new_idx, &n)) {
+            result = append_arrf(result, cols.data+n*i);
+            last_new_idx = i;
         }
     }
 
-    result = append_arrf_multiple(result,new_cols);
-    free_arrf(new_cols);
     return result;
 }
 
-// check whether c2 can be a permutation of c1 under f.
-bool precheck(arr2d_var sp1, arr2d_var sp2, int* f) {
-    for (int s=0; s<sp1.len; s++) {
-        int size = size_arrv(sp1,s);
-        for (int s1=0; s1<size; s1++) {
-            int val = f[get_arrv(sp1,s,s1)];
-            bool matched = false;
-            for (int s2=0; s2<size; s2++) {
-                if (get_arrv(sp2,s,s2) == val) {
-                    matched = true;
-                    goto matched_out;
-                }
-            }
-            matched_out:
-            if (!matched)
-                return false;
-        }
+int cmp_lexicographic(const void* a, const void* b, void* arg) {
+    int n = *(int*)arg;
+    for (int j=0; j<n; j++) {
+        int cmp = *(((int*)a)+j) - *(((int*)b)+j);
+        if (cmp) return cmp;
     }
-    return true;
+    return 0;
 }
 
-// check whether c2 is some color permutation of c1 under the automorphism f.
-bool is_color_permutation_iso(int n, int num_cols, int* col1, int* col2, int* f) {
-    int swaps[num_cols];
-    memset(swaps,0,sizeof(int)*num_cols);
-    for (int j=0; j<n; j++) {
-        int c1 = col1[j];
-        if (swaps[c1]) {
-            if (swaps[c1] != col2[f[j]]+1)
-                return false;
-        } else {
-            swaps[c1] = col2[f[j]]+1;
+// Bring the coloring into a canonical form: the form obtained by color swapping and graph isos which is lexicographically lowest.
+// This is done in-place.
+static inline void make_canonical_form(int n, int* coloring, int num_cols, arr2d_fixed isos) {
+    int best[n]; // current lexicographically lowest coloring
+
+    // For each iso, perform color swaps to get the lexicographically lowest coloring for this iso and compare with the current best
+    for (int i=0; i<isos.len; i++) {
+        int current_col = 0;
+        int dict[num_cols]; // mapping old colors -> new colors
+        memset(dict,~0,num_cols*sizeof(int)); // init to -1
+
+        int became_better_at = 100;
+        bool is_better = (i==0);
+
+        // bring into lexicographically lowest form
+        for (int j=0; j<n; j++) {
+            int v = get_arrf(isos,i,j);
+            int old_col = coloring[v];
+            int new_col = dict[old_col];
+            if (new_col < 0) {
+                dict[old_col] = current_col; // do color swapping assignment
+                new_col = current_col;
+                current_col++;
+            }
+
+            // check wheter current coloring is worse, better (or same) than the current best
+            if (!is_better && new_col > best[j]) break;
+            if (!is_better && new_col < best[j]) is_better = true;
+
+            // update if better
+            if (is_better) best[j] = new_col;
         }
     }
-    return true;
+
+    memcpy(coloring,best,n*sizeof(int));
 }

@@ -23,7 +23,7 @@ legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int max_
     arr2d_fixed isos = get_isometries(adj);
     arr2d_var partitions = cliquewise_vertex_partition(n, cliques);
 
-    int cmin = 0; // g.chromatic_number() is slow
+    int cmin = size_arrv(partitions,0); // sage's g.chromatic_number() is too slow, so we start lower
     int cmax = num_colors_upper_bound(n, cliques, legal_states);
     if (max_cols > 0) cmax = MIN(cmax, max_cols);
 
@@ -32,11 +32,6 @@ legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int max_
 
     // Colorings: all colorings of specific #colors
     legal_orbits_result all_orbits = { .colorings = arr2d_fixed_create_empty(n, 10), .states = arr2d_var_create_empty(20, 10) };
-
-    // Above REDUCE_THRESHOLD number of colorings, we don't reduce the colorings into isomorpishm classes but directly perform orbit search.
-    // Why? The runtime of orbit search is linear in the number of colorings, while the runtime of isomorphism reduction is quadratic.
-    // TODO: reduce colorings into cosets -> get O(n log n)
-    int REDUCE_THRESHOLD = 20000;
 
     for (int c=cmin; c<=cmax; c++) {
         if (verbose) {
@@ -47,23 +42,25 @@ legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int max_
         // Find colorings
         now = millis();
         arr2d_fixed cols = find_all_colorings(adj, c, partitions);
-        if (cols.len < REDUCE_THRESHOLD) {
-            arr2d_fixed reduced = kill_permutations_and_isos(n, c, cols, isos);
-            free_arrf(cols);
-            cols = reduced;
+        arr2d_fixed reduced = reduce_colorings(n, c, cols, isos);
+        free_arrf(cols);
+
+        if (reduced.len == 0) {
+            free_arrf(reduced);
+            if (verbose) printf("\n");
+            continue;
         }
 
         if (verbose) {
-            if (cols.len < REDUCE_THRESHOLD)
-                printf("found %d reduced colorings (in %lld ms)... ", cols.len, millis()-now);
-            else
-                printf("found %d colorings... ", cols.len);
+            printf("found %d unique colorings (in %lld ms)... ", reduced.len, millis()-now);
             fflush(stdout);
+        } else if (verbose) {
+            printf("\n");
         }
 
         // Find legal orbits
         now = millis();
-        legal_orbits_result orbits = find_legal_orbits(n, cols, legal_states, num_threads, single_orbit);
+        legal_orbits_result orbits = find_legal_orbits(n, reduced, legal_states, num_threads, single_orbit);
         all_orbits.colorings = append_arrf_multiple(all_orbits.colorings, orbits.colorings);
         all_orbits.states = append_arrv_multiple(all_orbits.states, orbits.states);
 
@@ -77,7 +74,7 @@ legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int max_
                 printf("found no legal orbit (in %lld ms).\n", millis()-now);
         }
 
-        free_arrf(cols);
+        free_arrf(reduced);
         free_arrf(orbits.colorings);
         free_arrv(orbits.states);
 

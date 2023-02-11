@@ -13,7 +13,7 @@
 int num_colors_upper_bound(int n, arr2d_var cliques, arr2d_fixed legal_states);
 arr2d_var cliquewise_vertex_partition(int n, arr2d_var cliques);
 arr2d_fixed find_all_colorings(arr2d_fixed adj, int num_cols, arr2d_var partition);
-arr2d_fixed kill_permutations_and_isos(int n, int num_colors, arr2d_fixed cols, arr2d_fixed isos);
+arr2d_fixed reduce_colorings(int n, int num_colors, arr2d_fixed cols, arr2d_fixed isos);
 
 // graph.c
 arr2d_fixed get_isometries(arr2d_fixed adj);
