@@ -296,13 +296,10 @@ arr2d_fixed reduce_colorings(int n, int num_colors, arr2d_fixed cols, arr2d_fixe
     }
 
     // 1. Bring all colorings into a canonical form: the form obtained by color swapping and graph isos which is lexicographically lowest.
-    int64_t a = millis();
     for (int i=0; i<cols.len; i++)
         make_canonical_form(n, cols.data+n*i, num_colors, isos);
 
-    int64_t b = millis();
     sort_r(cols.data, cols.len, n*sizeof(int), cmp_lexicographic, &n);
-    printf("can. form took %lld ms, sorting took %lld ms\n", b-a, millis()-b);
 
     // 2. Remove multiples from the colorings list
     arr2d_fixed result = arr2d_fixed_create_empty(n, cols.len/isos.len);

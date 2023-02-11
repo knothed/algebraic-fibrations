@@ -9,7 +9,7 @@
 
 // Find all (or just one) legal orbit(s) for the given graph.
 // Consider all colorings with up to max_cols colors. Split orbit search work into num_thread threads.
-legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int max_cols, bool verbose, int num_threads, bool single_orbit) {
+legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int min_cols, int max_cols, bool verbose, int num_threads, bool single_orbit) {
     int n = adj.row_len;
 
     // Preparations
@@ -25,6 +25,7 @@ legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int max_
 
     int cmin = size_arrv(partitions,0); // sage's g.chromatic_number() is too slow, so we start lower
     int cmax = num_colors_upper_bound(n, cliques, legal_states);
+    cmin = MAX(cmin, min_cols);
     if (max_cols > 0) cmax = MIN(cmax, max_cols);
 
     if (verbose)

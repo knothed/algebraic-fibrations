@@ -16,14 +16,13 @@ import ctypes
 
 # Determine (by brute force) whether a graph virtually algebraically fibers. Only consider colorings with up to max_cols colors, if desired.
 # Split up the orbit search work onto multiple threads, if desired.
-def has_legal_orbit(g, max_cols=None, verbose=True, num_threads=1):
+def has_legal_orbit(g, min_cols=0, max_cols=0, verbose=True, num_threads=1):
     cdef int n = g.order()
     cdef arr2d_fixed adj = arrf_from_adj_matrix(g.adjacency_matrix())
     cliques_py = sorted(list(all_cliques(g,min_size=2)), key=len, reverse=True)
     cdef arr2d_var cliques = arrv_from_nested_list(cliques_py)
 
-    if max_cols is None: max_cols = 0
-    cdef legal_orbits_result orbits = graph_fiberings(adj, cliques, max_cols, verbose, max(1,num_threads), true)
+    cdef legal_orbits_result orbits = graph_fiberings(adj, cliques, min_cols, max_cols, verbose, max(1,num_threads), true)
     fibers = orbits.colorings.len > 0
 
     free_arrf(adj, orbits.colorings)
@@ -35,14 +34,13 @@ def has_legal_orbit(g, max_cols=None, verbose=True, num_threads=1):
 # If such an orbit exists, the result will be of the form {'coloring': list, 'state': list} where coloring is a list representing the coloring,
 # and state represents a SINGLE state: it contains all vertices which are part of the state.
 # Else, None is returned.
-def one_legal_orbit(g, max_cols=None, verbose=True, num_threads=1):
+def one_legal_orbit(g, min_cols=0, max_cols=0, verbose=True, num_threads=1):
     cdef int n = g.order()
     cdef arr2d_fixed adj = arrf_from_adj_matrix(g.adjacency_matrix())
     cliques_py = sorted(list(all_cliques(g,min_size=2)), key=len, reverse=True)
     cdef arr2d_var cliques = arrv_from_nested_list(cliques_py)
 
-    if max_cols is None: max_cols = 0
-    cdef legal_orbits_result orbits = graph_fiberings(adj, cliques, max_cols, verbose, max(1,num_threads), true)
+    cdef legal_orbits_result orbits = graph_fiberings(adj, cliques, min_cols, max_cols, verbose, max(1,num_threads), true)
 
     result = None
     if orbits.colorings.len > 0:
@@ -58,14 +56,13 @@ def one_legal_orbit(g, max_cols=None, verbose=True, num_threads=1):
 # Split up the orbit search work onto multiple threads, if desired.
 # The result will be an array of dictionaries {'coloring': list, 'states': list} where coloring is a list representing the coloring,
 # and states is a list representing all the different legal orbits that exist: it contains one state per legal orbit.
-def all_legal_orbits(g, max_cols=None, verbose=True, num_threads=1):
+def all_legal_orbits(g, min_cols=0, max_cols=0, verbose=True, num_threads=1, states_as_vertex_lists=False):
     cdef int n = g.order()
     cdef arr2d_fixed adj = arrf_from_adj_matrix(g.adjacency_matrix())
     cliques_py = sorted(list(all_cliques(g,min_size=2)), key=len, reverse=True)
     cdef arr2d_var cliques = arrv_from_nested_list(cliques_py)
 
-    if max_cols is None: max_cols = 0
-    cdef legal_orbits_result orbits = graph_fiberings(adj, cliques, max_cols, verbose, max(1,num_threads), false)
+    cdef legal_orbits_result orbits = graph_fiberings(adj, cliques, min_cols, max_cols, verbose, max(1,num_threads), false)
 
     # Convert to list
     now = time_ms()
@@ -74,7 +71,10 @@ def all_legal_orbits(g, max_cols=None, verbose=True, num_threads=1):
     for i in range(orbits.colorings.len):
         result[i] = {}
         result[i]['coloring'] = list_from_arrf_row(orbits.colorings, i)
-        result[i]['states'] = list_from_arrv_row(orbits.states, i)
+        if states_as_vertex_lists:
+            result[i]['states'] = list(map(vertices_in_state,list_from_arrv_row(orbits.states, i)))
+        else:
+            result[i]['states'] = list_from_arrv_row(orbits.states, i)
 
     free_arrf(adj, orbits.colorings)
     free_arrv(cliques, orbits.states)
@@ -115,7 +115,7 @@ def all_reduced_colorings(g, num_cols, verbose=False):
     cdef arr2d_fixed cols = find_all_colorings(adj,num_cols,partitions)
     if verbose: t2 = time_ms()
     cdef arr2d_fixed reduced = reduce_colorings(n,num_cols,cols,isos)
-    if verbose: print(f"Found {cols.len} colorings in {t2-t1}ms; reduced to {reduced.len} unique ones in {time_ms()-t2} ms.")
+    if verbose: print(f"Found {cols.len} colorings in {t2-t1} ms; reduced to {reduced.len} unique ones in {time_ms()-t2} ms.")
 
     free_arrf(adj, isos, cols)
     free_arrv(cliques, partitions)
@@ -133,7 +133,7 @@ cdef extern from "impl/coloring.c":
     arr2d_fixed reduce_colorings(int n, int num_colors, arr2d_fixed cols, arr2d_fixed isos)
 
 cdef extern from "impl/fibering.c":
-    legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int max_cols, bint verbose, int num_threads, bint single_orbit)
+    legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int min_cols, int max_cols, bint verbose, int num_threads, bint single_orbit)
 
 cdef extern from "impl/graph.c":
     bint is_graph_hyperbolic(arr2d_fixed adj)
