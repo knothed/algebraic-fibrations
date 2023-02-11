@@ -3,6 +3,7 @@
 ///
 
 #include "utils.h"
+#include <stdarg.h>
 
 int64_t millis() {
     struct timespec now;
@@ -45,8 +46,14 @@ arr2d_fixed append_arrf_multiple(arr2d_fixed arr, arr2d_fixed other) {
     return new;
 }
 
-void free_arrf(arr2d_fixed arr) {
-    free(arr.data);
+static void free_arrfs(int n, ...) {
+    va_list args;
+    va_start(args, n);
+    while (n--) {
+        arr2d_fixed arr = va_arg(args, arr2d_fixed);
+        free(arr.data);
+    }
+    va_end(args);
 }
 
 void print_arrf(arr2d_fixed arr) {
@@ -119,9 +126,15 @@ arr2d_var append_arrv_multiple(arr2d_var arr, arr2d_var other) {
     return new;
 }
 
-void free_arrv(arr2d_var arr) {
-    free(arr.data);
-    free(arr.end_indices);
+static void free_arrvs(int n, ...) {
+    va_list args;
+    va_start(args, n);
+    while (n--) {
+        arr2d_var arr = va_arg(args, arr2d_var);
+        free(arr.data);
+        free(arr.end_indices);
+    }
+    va_end(args);
 }
 
 void print_arrv(arr2d_var arr) {

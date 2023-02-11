@@ -26,10 +26,8 @@ def has_legal_orbit(g, max_cols=None, verbose=True, num_threads=1):
     cdef legal_orbits_result orbits = graph_fiberings(adj, cliques, max_cols, verbose, max(1,num_threads), true)
     fibers = orbits.colorings.len > 0
 
-    free_arrf(adj)
-    free_arrv(cliques)
-    free_arrf(orbits.colorings)
-    free_arrv(orbits.states)
+    free_arrf(adj, orbits.colorings)
+    free_arrv(cliques, orbits.states)
     return fibers
 
 # Get a single legal orbit (which has at most max_cols colors, if desired).
@@ -52,10 +50,8 @@ def one_legal_orbit(g, max_cols=None, verbose=True, num_threads=1):
         state = vertices_in_state(get_arrv(orbits.states, 0, 0))
         result = {'coloring': col, 'state': state}
 
-    free_arrf(adj)
-    free_arrv(cliques)
-    free_arrf(orbits.colorings)
-    free_arrv(orbits.states)
+    free_arrf(adj, orbits.colorings)
+    free_arrv(cliques, orbits.states)
     return result
 
 # Get all legal orbits that exist for a graph. Stop at colorings with more than max_cols colors, if desired.
@@ -80,10 +76,8 @@ def all_legal_orbits(g, max_cols=None, verbose=True, num_threads=1):
         result[i]['coloring'] = list_from_arrf_row(orbits.colorings, i)
         result[i]['states'] = list_from_arrv_row(orbits.states, i)
 
-    free_arrf(adj)
-    free_arrv(cliques)
-    free_arrf(orbits.colorings)
-    free_arrv(orbits.states)
+    free_arrf(adj, orbits.colorings)
+    free_arrv(cliques, orbits.states)
     return result
 
 
@@ -123,11 +117,8 @@ def all_reduced_colorings(g, num_cols, verbose=False):
     cdef arr2d_fixed reduced = reduce_colorings(n,num_cols,cols,isos)
     if verbose: print(f"Found {cols.len} colorings in {t2-t1}ms; reduced to {reduced.len} unique ones in {time_ms()-t2} ms.")
 
-    free_arrf(adj)
-    free_arrf(isos)
-    free_arrv(cliques)
-    free_arrv(partitions)
-    free_arrf(cols)
+    free_arrf(adj, isos, cols)
+    free_arrv(cliques, partitions)
     return np_array_from_arrf(reduced)
 
 
@@ -154,7 +145,7 @@ cdef extern from "impl/utils.c":
         int row_len
         int len
     int get_arrf(arr2d_fixed arr, int i, int j)
-    void free_arrf(arr2d_fixed arr)
+    void free_arrf(...)
     void print_arrf(arr2d_fixed arr)
     arr2d_fixed arr2d_fixed_create_from(int* data, int row_len, int len)
 
@@ -162,7 +153,7 @@ cdef extern from "impl/utils.c":
         pass
     int get_arrv(arr2d_var arr, int i, int j)
     int size_arrv(arr2d_var arr, int i)
-    void free_arrv(arr2d_var arr)
+    void free_arrv(...)
     void print_arrv(arr2d_var arr)
     arr2d_var arr2d_var_create_empty(int total_capacity, int num_rows_capacity)
     arr2d_var append_arrv(arr2d_var arr, int* src, int n)

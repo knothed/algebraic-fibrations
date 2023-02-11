@@ -74,16 +74,14 @@ legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int max_
                 printf("found no legal orbit (in %lld ms).\n", millis()-now);
         }
 
-        free_arrf(reduced);
-        free_arrf(orbits.colorings);
+        free_arrf(reduced, orbits.colorings);
         free_arrv(orbits.states);
 
         if (found_orbit && single_orbit)
             break;
     }
 
-    free_arrf(legal_states);
-    free_arrf(isos);
+    free_arrf(isos, legal_states);
     free_arrv(partitions);
 
     return all_orbits;

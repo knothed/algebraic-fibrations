@@ -42,7 +42,8 @@ typedef struct {
 arr2d_fixed arr2d_fixed_create_empty(int row_len, int capacity);
 arr2d_fixed arr2d_fixed_create_from(int* data, int row_len, int len);
 arr2d_fixed append_arrf_multiple(arr2d_fixed arr, arr2d_fixed new); // append multiple rows to the array
-void free_arrf(arr2d_fixed arr);
+#define free_arrf(...) free_arrfs(sizeof((arr2d_fixed[]) {__VA_ARGS__}) / sizeof(arr2d_fixed), __VA_ARGS__)
+static void free_arrfs(int n, ...);
 void print_arrf(arr2d_fixed arr);
 void print_arrf_row(arr2d_fixed arr, int i);
 
@@ -79,7 +80,8 @@ typedef struct {
 arr2d_var arr2d_var_create_empty(int total_capacity, int num_rows_capacity);
 arr2d_var arr2d_var_create_from(int* data, int* end_indices, int len);
 arr2d_var append_arrv_multiple(arr2d_var arr, arr2d_var other); // append multiple rows to the array
-void free_arrv(arr2d_var arr);
+#define free_arrv(...) free_arrvs(sizeof((arr2d_var[]) {__VA_ARGS__}) / sizeof(arr2d_var), __VA_ARGS__)
+static void free_arrvs(int n, ...);
 void print_arrv(arr2d_var arr);
 void print_arrv_row(arr2d_var arr, int i);
 
