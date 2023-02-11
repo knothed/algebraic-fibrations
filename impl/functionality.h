@@ -26,7 +26,7 @@ typedef struct {
     arr2d_var states;
 } legal_orbits_result;
 
-arr2d_fixed all_legal_states(arr2d_fixed adj);
+arr2d_fixed all_legal_states(arr2d_fixed adj, arr2d_fixed isos);
 legal_orbits_result find_legal_orbits(int n, arr2d_fixed colorings, arr2d_fixed legal_states, int num_threads, bool stop_after_first);
 
 #endif

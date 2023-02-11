@@ -21,6 +21,7 @@ legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int max_
 
     arr2d_fixed legal_states = all_legal_states(adj);
     arr2d_fixed isos = get_isometries(adj);
+    arr2d_fixed legal_states = all_legal_states(adj,isos);
     arr2d_var partitions = cliquewise_vertex_partition(n, cliques);
 
     int cmin = size_arrv(partitions,0); // sage's g.chromatic_number() is too slow, so we start lower

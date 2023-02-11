@@ -17,20 +17,34 @@ bool is_state_legal(arr2d_fixed adj, int state);
 // All legal states between 0 and 2^(n-1).
 // To avoid redundancy, we don't return any legal states where vertex (n-1) is set.
 // The result is a 2D array where each row is a single integer representing the state as a bitmask.
-arr2d_fixed all_legal_states(arr2d_fixed adj) {
+arr2d_fixed all_legal_states(arr2d_fixed adj, arr2d_fixed isos) {
     int n = adj.len;
     int max = 1 << (n-1);
-    arr2d_fixed result = arr2d_fixed_create_empty(1,max);
-    int count = 0;
+    arr2d_fixed result = arr2d_fixed_create_empty(1,max/2);
 
-    for (int i=1; i<max; i++) {
-        if (is_state_legal(adj,i)) {
-            result.data[count] = i;
-            count++;
+    char* dict = malloc(max*sizeof(char)); // for isometries
+    memset(dict,~0,max*sizeof(char));
+
+    for (int state=1; state<max; state++) {
+        if (dict[state] >= 0)
+            continue;
+
+        bool legal = is_state_legal(adj,state);
+
+        // act on state
+        for (int iso=0; iso<isos.len; iso++) {
+            int acted = 0;
+            for (int i=0; i<n; i++)
+                if ((state >> i) & 1)
+                    acted += (1 << get_arrf(isos,iso,i));
+            if (acted >= max) acted = 2*max-acted-1;
+            if (dict[acted] >= 0) continue; // orbit might not be free
+            dict[acted] = legal ? 1 : 0;
+            if (legal)
+                result = append_arrf_single(result, acted);
         }
     }
 
-    result.len = count;
     return result;
 }
 
