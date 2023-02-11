@@ -19,7 +19,6 @@ legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int max_
     }
     int64_t now = millis();
 
-    arr2d_fixed legal_states = all_legal_states(adj);
     arr2d_fixed isos = get_isometries(adj);
     arr2d_fixed legal_states = all_legal_states(adj,isos);
     arr2d_var partitions = cliquewise_vertex_partition(n, cliques);

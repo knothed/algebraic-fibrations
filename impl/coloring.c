@@ -12,14 +12,60 @@
 
 // Deduce an upper bound on the number of colors for a coloring from cliques in the graph and the shape of the legal states.
 // legal_states only contains non-redundant legal states from 0 to 2^(n-1).
-// cliques only contains cliques of size 2 or more.
+// cliques must be sorted by decreasing length and should not contain size-1 cliques.
 int num_colors_upper_bound(int n, arr2d_var cliques, arr2d_fixed legal_states) {
-    // 1-clique check (number of legal states)
+    // Trivial 1-clique check (number of legal states)
     int upper_bound = log2_int(legal_states.len) + 1;
-    int p = upper_bound;
 
+    // 1. Remove cliques that are contained in other cliques
+    // (Attention: this is O(n^2) in #cliques! But hopefully it is worth it to speed up part 2 of the algorithm)
+    arr2d_var reduced = arr2d_var_create_empty(total_len_arrv(cliques)/2, cliques.len/3);
+int64_t now = millis();
+    // Convert cliques into bitmasks for fast containment checking
+    int clique_masks[cliques.len];
+    memset(clique_masks,0,cliques.len*sizeof(int));
+    for (int i=0; i<cliques.len; i++)
+        for (int j=0; j<size_arrv(cliques,i); j++)
+            clique_masks[i] += (1 << get_arrv(cliques,i,j));
+
+    int* reduced_masks = malloc(cliques.len*sizeof(int));
+    int num_reduced = 0;
+    int curr_clique_size = 0;
+    int curr_clique_size_start_idx = 0; // cliques cannot be contained in same-size cliques
     for (int i=0; i<cliques.len; i++) {
-        int size = size_arrv(cliques,i);
+        if (size_arrv(cliques,i) != curr_clique_size) {
+            curr_clique_size = size_arrv(cliques,i);
+            curr_clique_size_start_idx = num_reduced;
+        }
+        bool is_maximal = true;
+        for (int j=0; j<curr_clique_size_start_idx; j++) {
+            if ((clique_masks[i] & ~reduced_masks[j]) == 0) {
+                is_maximal = false;
+                break;
+            }
+        }
+        if (is_maximal) {
+            reduced_masks[num_reduced] = clique_masks[i];
+            num_reduced++;
+        }
+    }
+
+    // Convert back into vertex list
+    for (int i=0; i<num_reduced; i++) {
+        int state[32];
+        int len = 0;
+        for (int j=0; j<32; j++) {
+            if ((reduced_masks[i] >> j) & 1) {
+                state[len] = j;
+                len++;
+            }
+        }
+        reduced = append_arrv(reduced,state,len);
+    }
+
+    // 2. Check all maximal cliques
+    for (int i=0; i<reduced.len; i++) {
+        int size = size_arrv(reduced,i);
         int max = 1<<(size-1);
         int counts[max];
         memset(counts,0,max*sizeof(int));
@@ -28,7 +74,7 @@ int num_colors_upper_bound(int n, arr2d_var cliques, arr2d_fixed legal_states) {
         for (int j=0; j<legal_states.len; j++) {
             int bits = 0;
             for (int b=0; b<size; b++) {
-                bits += ((get_arrf1d(legal_states,j) >> get_arrv(cliques,i,b)) & 1) * (1<<b); // check if bit b is set in legal_states[j]
+                bits += ((get_arrf1d(legal_states,j) >> get_arrv(reduced,i,b)) & 1) * (1<<b); // check if bit b is set in legal_states[j]
             }
 
             if (bits >= max)
