@@ -142,10 +142,10 @@ void* orbit_thread_enter(void* arg) {
 
     int n = args.n;
     int max_states = 1 << (n-1);
+    bool* legal_copy = malloc(max_states*sizeof(bool));
     for (int i=args.start_idx; i<=args.end_idx; i++) {
         if (*args.stop) break;
-        bool legal_copy[max_states];
-        memcpy(legal_copy,args.legal_dict,sizeof(legal_copy));
+        memcpy(legal_copy,args.legal_dict,max_states*sizeof(bool));
         result = find_legal_orbits_single(n, args.colorings.data+n*i, args.legal_states, legal_copy, result, args.stop, args.stop_after_first);
     }
 
@@ -158,7 +158,7 @@ void* orbit_thread_enter(void* arg) {
 legal_orbits_result find_legal_orbits(int n, arr2d_fixed colorings, arr2d_fixed legal_states, int num_threads, bool stop_after_first) {
     // Convert legal_states into "dictionary" for fast checking whether state is contained
     int max_states = 1 << (n-1);
-    bool legal_dict[max_states];
+    bool* legal_dict = malloc(max_states*sizeof(bool));
     memset(legal_dict,0,max_states*sizeof(bool));
     for (int i=0; i<legal_states.len; i++)
         legal_dict[get_arrf1d(legal_states,i)] = 1;
