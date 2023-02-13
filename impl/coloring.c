@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdbool.h>
+#include <pthread.h>
 #include "functionality.h"
 #include "sort_r.h"
 #include "utils.h"
@@ -286,8 +287,23 @@ arr2d_fixed find_all_colorings_impl(arr2d_fixed adj, int num_cols, int used_cols
 static inline void make_canonical_form(int n, int* coloring, int num_cols, arr2d_fixed isos);
 int cmp_lexicographic(const void* a, const void* b, void* arg);
 
+typedef struct {
+    int n;
+    int num_colors;
+    arr2d_fixed colorings;
+    arr2d_fixed isos;
+    int start_idx;
+    int end_idx;
+} canonical_thread_args;
+
+void* canonical_thread_enter(void* arg) {
+    canonical_thread_args args = *((canonical_thread_args*)arg);
+    for (int i=args.start_idx; i<=args.end_idx; i++)
+        make_canonical_form(args.n, args.colorings.data + args.n*i, args.num_colors, args.isos);
+}
+
 // Reduce the array of colorings up to color swapping and graph isomorphism.
-arr2d_fixed reduce_colorings(int n, int num_colors, arr2d_fixed cols, arr2d_fixed isos) {
+arr2d_fixed reduce_colorings(int n, int num_colors, arr2d_fixed cols, arr2d_fixed isos, int num_threads) {
     // If there is only the identity iso, nothing can be reduced because of the way we generated the colorings
     if (isos.len <= 1) {
         arr2d_fixed copy = arr2d_fixed_create_empty(cols.row_len, cols.len);
@@ -295,10 +311,32 @@ arr2d_fixed reduce_colorings(int n, int num_colors, arr2d_fixed cols, arr2d_fixe
         return copy;
     }
 
-    // 1. Bring all colorings into a canonical form: the form obtained by color swapping and graph isos which is lexicographically lowest.
-    for (int i=0; i<cols.len; i++)
-        make_canonical_form(n, cols.data+n*i, num_colors, isos);
+    // 1.a (threaded) Bring all colorings into a canonical form: the form obtained by color swapping and graph isos which is lexicographically lowest.
+    num_threads = MAX(1, num_threads);
+    pthread_t pids[num_threads];
+    canonical_thread_args args[num_threads];
+    for (int i=0; i<num_threads; i++) {
+        int from = (i*cols.len)/num_threads;
+        int to = ((i+1)*cols.len)/num_threads - 1;
+        args[i] = (canonical_thread_args) {
+            .n = n, .num_colors = num_colors, .colorings = cols, .isos = isos, .start_idx = from, .end_idx = to
+        };
 
+        if (num_threads > 1) {
+            if (pthread_create(&pids[i],0,&canonical_thread_enter,&args[i])) {
+                fprintf(stderr, "error: thread couldn't be created\n");
+                exit(1);
+            }
+        } else { // don't create a new thread but use this one for a single thread
+            canonical_thread_enter(args);
+        }
+    }
+
+    if (num_threads > 1)
+        for (int i=0; i<num_threads; i++)
+            pthread_join(pids[i], 0);
+
+    // 1.b Sort the canonicalized colorings
     sort_r(cols.data, cols.len, n*sizeof(int), cmp_lexicographic, &n);
 
     // 2. Remove multiples from the colorings list

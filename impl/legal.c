@@ -178,6 +178,7 @@ legal_orbits_result find_legal_orbits(int n, arr2d_fixed colorings, arr2d_fixed 
         legal_dict[get_arrf1d(legal_states,i)] = 1;
 
     // create threads
+    num_threads = MAX(1, num_threads);
     pthread_t pids[num_threads];
     orbit_thread_args args[num_threads];
     bool* stop = malloc(sizeof(bool));

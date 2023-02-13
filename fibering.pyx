@@ -22,7 +22,7 @@ def has_legal_orbit(g, min_cols=0, max_cols=0, verbose=True, num_threads=1):
     cliques_py = sorted(list(all_cliques(g,min_size=2)), key=len, reverse=True)
     cdef arr2d_var cliques = arrv_from_nested_list(cliques_py)
 
-    cdef legal_orbits_result orbits = graph_fiberings(adj, cliques, min_cols, max_cols, verbose, max(1,num_threads), true)
+    cdef legal_orbits_result orbits = graph_fiberings(adj, cliques, min_cols, max_cols, verbose, num_threads, true)
     fibers = orbits.colorings.len > 0
 
     free_arrf(adj, orbits.colorings)
@@ -40,7 +40,7 @@ def one_legal_orbit(g, min_cols=0, max_cols=0, verbose=True, num_threads=1):
     cliques_py = sorted(list(all_cliques(g,min_size=2)), key=len, reverse=True)
     cdef arr2d_var cliques = arrv_from_nested_list(cliques_py)
 
-    cdef legal_orbits_result orbits = graph_fiberings(adj, cliques, min_cols, max_cols, verbose, max(1,num_threads), true)
+    cdef legal_orbits_result orbits = graph_fiberings(adj, cliques, min_cols, max_cols, verbose, num_threads, true)
 
     result = None
     if orbits.colorings.len > 0:
@@ -62,7 +62,7 @@ def all_legal_orbits(g, min_cols=0, max_cols=0, verbose=True, num_threads=1, sta
     cliques_py = sorted(list(all_cliques(g,min_size=2)), key=len, reverse=True)
     cdef arr2d_var cliques = arrv_from_nested_list(cliques_py)
 
-    cdef legal_orbits_result orbits = graph_fiberings(adj, cliques, min_cols, max_cols, verbose, max(1,num_threads), false)
+    cdef legal_orbits_result orbits = graph_fiberings(adj, cliques, min_cols, max_cols, verbose, num_threads, false)
 
     # Convert to list
     now = time_ms()
@@ -102,7 +102,7 @@ def vertices_in_state(state):
 # Find all colorings for a graph with exactly num_cols colors.
 # Reduce the colorings modulo color swapping and graph isometries.
 # The result is a 2D numpy array where each row represents a coloring.
-def all_reduced_colorings(g, num_cols, verbose=False):
+def all_reduced_colorings(g, num_cols, verbose=False, num_threads=1):
     cdef int n = g.order()
     cdef arr2d_fixed adj = arrf_from_adj_matrix(g.adjacency_matrix())
     cdef arr2d_fixed isos = get_isometries(adj)
@@ -112,9 +112,9 @@ def all_reduced_colorings(g, num_cols, verbose=False):
     cdef arr2d_var partitions = cliquewise_vertex_partition(n, cliques)
 
     if verbose: t1 = time_ms()
-    cdef arr2d_fixed cols = find_all_colorings(adj,num_cols,partitions)
+    cdef arr2d_fixed cols = find_all_colorings(adj, num_cols, partitions)
     if verbose: t2 = time_ms()
-    cdef arr2d_fixed reduced = reduce_colorings(n,num_cols,cols,isos)
+    cdef arr2d_fixed reduced = reduce_colorings(n, num_cols, cols, isos, num_threads)
     if verbose: print(f"Found {cols.len} colorings in {t2-t1} ms; reduced to {reduced.len} unique ones in {time_ms()-t2} ms.")
 
     free_arrf(adj, isos, cols)
@@ -130,7 +130,7 @@ def all_reduced_colorings(g, num_cols, verbose=False):
 cdef extern from "impl/coloring.c":
     arr2d_var cliquewise_vertex_partition(int n, arr2d_var cliques); # todo: remove this function entirely and just focus on a single largest clique
     arr2d_fixed find_all_colorings(arr2d_fixed adj, int num_cols, arr2d_var partitions)
-    arr2d_fixed reduce_colorings(int n, int num_colors, arr2d_fixed cols, arr2d_fixed isos)
+    arr2d_fixed reduce_colorings(int n, int num_colors, arr2d_fixed cols, arr2d_fixed isos, int num_threads)
 
 cdef extern from "impl/fibering.c":
     legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int min_cols, int max_cols, bint verbose, int num_threads, bint single_orbit)

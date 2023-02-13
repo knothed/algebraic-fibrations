@@ -43,7 +43,7 @@ legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int min_
         // Find colorings
         now = millis();
         arr2d_fixed cols = find_all_colorings(adj, c, partitions);
-        arr2d_fixed reduced = reduce_colorings(n, c, cols, isos);
+        arr2d_fixed reduced = reduce_colorings(n, c, cols, isos, num_threads);
         free_arrf(cols);
 
         if (reduced.len == 0) {
