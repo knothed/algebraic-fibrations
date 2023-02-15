@@ -6,6 +6,7 @@
 from sage.all import *
 from sage.graphs.cliquer import all_cliques
 from libc.stdlib cimport malloc, free
+from libc.stdint cimport uint64_t
 
 import numpy as np
 cimport numpy as np
@@ -15,7 +16,7 @@ import ctypes
 #### VIRTUAL ALGEBRAIC FIBERING: LEGAL ORBIT SEARCH ####
 
 # Determine (by brute force) whether a graph virtually algebraically fibers. Only consider colorings with up to max_cols colors, if desired.
-# Split up the orbit search work onto multiple threads, if desired.
+# Split up the parallelizable work into multiple threads, if desired.
 def has_legal_orbit(g, min_cols=0, max_cols=0, verbose=True, num_threads=1):
     cdef int n = g.order()
     cdef arr2d_fixed adj = arrf_from_adj_matrix(g.adjacency_matrix())
@@ -30,7 +31,7 @@ def has_legal_orbit(g, min_cols=0, max_cols=0, verbose=True, num_threads=1):
     return fibers
 
 # Get a single legal orbit (which has at most max_cols colors, if desired).
-# Split up the orbit search work onto multiple threads, if desired.
+# Split up the parallelizable work into multiple threads, if desired.
 # If such an orbit exists, the result will be of the form {'coloring': list, 'state': list} where coloring is a list representing the coloring,
 # and state represents a SINGLE state: it contains all vertices which are part of the state.
 # Else, None is returned.
@@ -53,7 +54,7 @@ def one_legal_orbit(g, min_cols=0, max_cols=0, verbose=True, num_threads=1):
     return result
 
 # Get all legal orbits that exist for a graph. Stop at colorings with more than max_cols colors, if desired.
-# Split up the orbit search work onto multiple threads, if desired.
+# Split up the parallelizable work into multiple threads, if desired.
 # The result will be an array of dictionaries {'coloring': list, 'states': list} where coloring is a list representing the coloring,
 # and states is a list representing all the different legal orbits that exist: it contains one state per legal orbit.
 def all_legal_orbits(g, min_cols=0, max_cols=0, verbose=True, num_threads=1, states_as_vertex_lists=False):
@@ -115,7 +116,7 @@ def all_reduced_colorings(g, num_cols, verbose=False, num_threads=1):
     cdef arr2d_fixed cols = find_all_colorings(adj, num_cols, partitions)
     if verbose: t2 = time_ms()
     cdef arr2d_fixed reduced = reduce_colorings(n, num_cols, cols, isos, num_threads)
-    if verbose: print(f"Found {cols.len} colorings in {t2-t1} ms; reduced to {reduced.len} unique ones in {time_ms()-t2} ms.")
+    if verbose: print(f"Found { pretty_int(cols.len).decode('utf-8') } colorings in { pretty_ms(t2-t1,True).decode('utf-8') }; reduced to { pretty_int(reduced.len).decode('utf-8') } unique ones in { pretty_ms(time_ms()-t2,True).decode('utf-8') }.")
 
     free_arrf(adj, isos, cols)
     free_arrv(cliques, partitions)
@@ -157,6 +158,9 @@ cdef extern from "impl/utils.c":
     void print_arrv(arr2d_var arr)
     arr2d_var arr2d_var_create_empty(int total_capacity, int num_rows_capacity)
     arr2d_var append_arrv(arr2d_var arr, int* src, int n)
+
+    char* pretty_ms(uint64_t ms, bint subsecond_precision)
+    char* pretty_int(int num)
 
 cdef extern from "impl/legal.c":
     ctypedef struct legal_orbits_result:

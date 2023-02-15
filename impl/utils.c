@@ -236,3 +236,60 @@ static inline void swap(int *a, int *b) {
     *a = *b;
     *b = tmp;
 }
+
+static inline void swap_char(char *a, char *b) {
+    char tmp = *a;
+    *a = *b;
+    *b = tmp;
+}
+
+
+/******** PRETTY PRINTING ********/
+
+// Convert a timespan, given in milliseconds, into a more human readable form.
+char* pretty_ms(uint64_t ms, bool subsecond_precision) {
+    char* result = malloc(8*sizeof(char));
+    uint64_t s = (ms+500)/1000;
+
+    if (subsecond_precision && ms+5 < 1000) {
+        snprintf(result, 8, "%.2fs", ((double)ms+5)/1000.0);
+    } else if (subsecond_precision && ms+50 < 10 * 1000) {
+        snprintf(result, 8, "%.1fs", ((double)ms+50)/1000.0);
+    } else if (s < 600) {
+        snprintf(result, 8, "%llds", s);
+    } else if (s < 600*600) {
+        snprintf(result, 8, "%lldm", s/60);
+    } else {
+        snprintf(result, 8, "%lldh", s/3600);
+    }
+
+    return result;
+}
+
+// Equip a nonnegative integer with thousands delimiters.
+char* pretty_int(int num) {
+    int len = 3+log2_int(num)/2;
+    char* result = malloc(len*sizeof(char));
+
+    // Write string into buffer
+    int i=0; int j=0;
+    do {
+        int digit = num%10;
+        result[i+j] = digit+'0';
+        num /= 10;
+
+        i++;
+        if (num > 0 && i%3==0) {
+            result[i+j] = '\'';
+            j++;
+        }
+    } while (num);
+
+    // Reverse string
+    len = i+j;
+    for (int i=0; i<len/2; i++)
+        swap_char(result+i, result+len-1-i);
+    result[len] = 0;
+
+    return result;
+}

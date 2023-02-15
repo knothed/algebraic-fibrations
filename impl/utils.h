@@ -21,6 +21,26 @@ static inline int log2_int(int a) {
 
 int64_t millis();
 
+/******** THREAD DELAY ********/
+
+#if defined(__WIN32__) || defined(_WIN32) || defined(WIN32) || defined(__WINDOWS__) || defined(__TOS_WIN__)
+
+#include <windows.h>
+
+inline void delay(unsigned long ms) {
+    Sleep(ms);
+}
+
+#else  /* presume POSIX */
+
+#include <unistd.h>
+
+inline void delay(unsigned long ms) {
+    usleep(ms * 1000);
+}
+
+#endif
+
 /******** 2D ARRAY OF INTS ********/
 // We define two types of 2D arrays, i.e. arrays of arrays of ints:
 // arr2d_fixed is a 2D array where all rows have a fixed, predefined length.
@@ -131,5 +151,14 @@ int choose(int n, int k);
 int ordered_choose(int n, int k);
 arr2d_fixed do_choose(int n, int k, int* ptr);
 arr2d_fixed do_ordered_choose(int n, int k, int* ptr);
+
+
+/******** PRETTY PRINTING ********/
+
+// Convert a timespan, given in milliseconds, into a more human readable form.
+char* pretty_ms(uint64_t ms, bool subsecond_precision);
+
+// Equip a nonnegative integer with thousands delimiters.
+char* pretty_int(int num);
 
 #endif

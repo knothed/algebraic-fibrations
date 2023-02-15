@@ -26,7 +26,42 @@ typedef struct {
     arr2d_var states;
 } legal_orbits_result;
 
+// Arguments that the worker threads receive.
+typedef struct {
+    int n;
+    arr2d_fixed legal_states;
+    bool* legal_dict;
+    arr2d_fixed colorings;
+    int start_idx;
+    int end_idx;
+    legal_orbits_result result;
+    bool* stop;
+    bool stop_after_first;
+    int* num_done;
+} orbit_thread_args;
+
+// Return type from find_legal_orbits. When threaded, this lets the user track the calculation progress.
+typedef struct {
+    // calculation
+    int n;
+    int num_threads;
+    pthread_t* pids;
+    orbit_thread_args* args;
+    bool* stop;
+
+    // updated via calc_update()
+    double progress;
+    uint64_t estimated_ms;
+    bool finished;
+
+    int num_colorings;
+    uint64_t begin_ms;
+} legal_orbits_calculation;
+
 arr2d_fixed all_legal_states(arr2d_fixed adj, arr2d_fixed isos);
-legal_orbits_result find_legal_orbits(int n, arr2d_fixed colorings, arr2d_fixed legal_states, int num_threads, bool stop_after_first);
+legal_orbits_calculation find_legal_orbits(int n, arr2d_fixed colorings, arr2d_fixed legal_states, int num_threads, bool force_threaded, bool stop_after_first);
+
+legal_orbits_calculation calc_update(legal_orbits_calculation calc);
+legal_orbits_result calc_finish(legal_orbits_calculation calc);
 
 #endif
