@@ -161,4 +161,7 @@ char* pretty_ms(uint64_t ms, bool subsecond_precision);
 // Equip a nonnegative integer with thousands delimiters.
 char* pretty_int(int num);
 
+// Print a progress bar onto the current line.
+void print_progress(char* prefix, double progress, int64_t estimated_ms);
+
 #endif

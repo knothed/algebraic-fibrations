@@ -1,3 +1,4 @@
+#cython: language_level=3
 ###
 ### A Python interface around the C code.
 ### Contains all exposed functionality regarding legal orbit search and related functionality.
@@ -6,7 +7,7 @@
 from sage.all import *
 from sage.graphs.cliquer import all_cliques
 from libc.stdlib cimport malloc, free
-from libc.stdint cimport uint64_t
+from libc.stdint cimport uint64_t, int64_t, intptr_t
 
 import numpy as np
 cimport numpy as np
@@ -17,13 +18,14 @@ import ctypes
 
 # Determine (by brute force) whether a graph virtually algebraically fibers. Only consider colorings with up to max_cols colors, if desired.
 # Split up the parallelizable work into multiple threads, if desired.
-def has_legal_orbit(g, min_cols=0, max_cols=0, verbose=True, num_threads=1):
+def has_legal_orbit(g, min_cols=0, max_cols=0, verbose=True, total_progress_bar=True, num_threads=1):
     cdef int n = g.order()
+
     cdef arr2d_fixed adj = arrf_from_adj_matrix(g.adjacency_matrix())
     cliques_py = sorted(list(all_cliques(g,min_size=2)), key=len, reverse=True)
     cdef arr2d_var cliques = arrv_from_nested_list(cliques_py)
 
-    cdef legal_orbits_result orbits = graph_fiberings(adj, cliques, min_cols, max_cols, verbose, num_threads, true)
+    cdef legal_orbits_result orbits = graph_fiberings(adj, cliques, min_cols, max_cols, verbose, total_progress_bar, num_threads, true)
     fibers = orbits.colorings.len > 0
 
     free_arrf(adj, orbits.colorings)
@@ -35,13 +37,13 @@ def has_legal_orbit(g, min_cols=0, max_cols=0, verbose=True, num_threads=1):
 # If such an orbit exists, the result will be of the form {'coloring': list, 'state': list} where coloring is a list representing the coloring,
 # and state represents a SINGLE state: it contains all vertices which are part of the state.
 # Else, None is returned.
-def one_legal_orbit(g, min_cols=0, max_cols=0, verbose=True, num_threads=1):
+def one_legal_orbit(g, min_cols=0, max_cols=0, verbose=True, total_progress_bar=False, num_threads=1):
     cdef int n = g.order()
     cdef arr2d_fixed adj = arrf_from_adj_matrix(g.adjacency_matrix())
     cliques_py = sorted(list(all_cliques(g,min_size=2)), key=len, reverse=True)
     cdef arr2d_var cliques = arrv_from_nested_list(cliques_py)
 
-    cdef legal_orbits_result orbits = graph_fiberings(adj, cliques, min_cols, max_cols, verbose, num_threads, true)
+    cdef legal_orbits_result orbits = graph_fiberings(adj, cliques, min_cols, max_cols, verbose, total_progress_bar, num_threads, true)
 
     result = None
     if orbits.colorings.len > 0:
@@ -57,13 +59,13 @@ def one_legal_orbit(g, min_cols=0, max_cols=0, verbose=True, num_threads=1):
 # Split up the parallelizable work into multiple threads, if desired.
 # The result will be an array of dictionaries {'coloring': list, 'states': list} where coloring is a list representing the coloring,
 # and states is a list representing all the different legal orbits that exist: it contains one state per legal orbit.
-def all_legal_orbits(g, min_cols=0, max_cols=0, verbose=True, num_threads=1, states_as_vertex_lists=False):
+def all_legal_orbits(g, min_cols=0, max_cols=0, verbose=True, total_progress_bar=True, num_threads=1, states_as_vertex_lists=False):
     cdef int n = g.order()
     cdef arr2d_fixed adj = arrf_from_adj_matrix(g.adjacency_matrix())
     cliques_py = sorted(list(all_cliques(g,min_size=2)), key=len, reverse=True)
     cdef arr2d_var cliques = arrv_from_nested_list(cliques_py)
 
-    cdef legal_orbits_result orbits = graph_fiberings(adj, cliques, min_cols, max_cols, verbose, num_threads, false)
+    cdef legal_orbits_result orbits = graph_fiberings(adj, cliques, min_cols, max_cols, verbose, total_progress_bar, num_threads, false)
 
     # Convert to list
     now = time_ms()
@@ -134,7 +136,7 @@ cdef extern from "impl/coloring.c":
     arr2d_fixed reduce_colorings(int n, int num_colors, arr2d_fixed cols, arr2d_fixed isos, int num_threads)
 
 cdef extern from "impl/fibering.c":
-    legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int min_cols, int max_cols, bint verbose, int num_threads, bint single_orbit)
+    legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int min_cols, int max_cols, bint verbose, bint total_progress_bar, int num_threads, bint single_orbit)
 
 cdef extern from "impl/graph.c":
     bint is_graph_hyperbolic(arr2d_fixed adj)
@@ -161,6 +163,7 @@ cdef extern from "impl/utils.c":
 
     char* pretty_ms(uint64_t ms, bint subsecond_precision)
     char* pretty_int(int num)
+    void print_progress(char* prefix, double progress, int64_t estimated_ms);
 
 cdef extern from "impl/legal.c":
     ctypedef struct legal_orbits_result:

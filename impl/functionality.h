@@ -16,6 +16,7 @@ arr2d_fixed find_all_colorings(arr2d_fixed adj, int num_cols, arr2d_var partitio
 arr2d_fixed reduce_colorings(int n, int num_colors, arr2d_fixed cols, arr2d_fixed isos, int num_threads);
 
 // graph.c
+bool is_graph_hyperbolic(arr2d_fixed adj);
 arr2d_fixed get_isometries(arr2d_fixed adj);
 
 // legal.c
@@ -51,7 +52,7 @@ typedef struct {
 
     // updated via calc_update()
     double progress;
-    uint64_t estimated_ms;
+    int64_t estimated_ms; // < 0 means not available
     bool finished;
 
     int num_colorings;

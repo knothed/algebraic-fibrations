@@ -7,7 +7,7 @@
 
 int64_t millis() {
     struct timespec now;
-    timespec_get(&now, TIME_UTC);
+    clock_gettime(CLOCK_REALTIME, &now);
     return ((int64_t) now.tv_sec) * 1000 + ((int64_t) now.tv_nsec) / 1000000;
 }
 
@@ -292,4 +292,29 @@ char* pretty_int(int num) {
     result[len] = 0;
 
     return result;
+}
+
+// Print a progress bar onto the current line.
+void print_progress(char* prefix, double progress, int64_t estimated_ms) {
+    printf("\r");
+    printf(prefix);
+
+    int percents = (int)(100*progress);
+    int tenths = percents/10;
+    int ones = percents-10*tenths;
+    for (int i=0; i<tenths; i++)
+        printf("█");
+    if (tenths < 10)
+        (ones < 3) ? printf("░") : (ones < 7) ? printf("▒") : printf("▓");
+    for (int i=tenths+1; i<10; i++)
+        printf("░");
+
+    if (estimated_ms >= 0) {
+        char* remaining = pretty_ms(estimated_ms, false);
+        printf(" (%d%%, %s left)", percents, remaining);
+        free(remaining);
+    } else {
+        printf(" (%d%%)", percents);
+    }
+    fflush(stdout);
 }

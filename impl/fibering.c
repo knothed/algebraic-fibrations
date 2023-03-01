@@ -7,11 +7,14 @@
 #include "functionality.h"
 #include "utils.h"
 
-void print_progress(legal_orbits_calculation calc, char* prefix);
+/******** SINGLE GRAPH FIBERING ********/
+
+legal_orbits_result do_orbit_search(int n, arr2d_fixed legal_states, arr2d_fixed colorings, bool verbose, char* text, int num_threads, bool single_orbit, uint64_t begin_time);
 
 // Find all (or just one) legal orbit(s) for the given graph.
 // Consider all colorings with between min_cols and max_cols colors. Split up the parallelizable work into num_thread threads.
-legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int min_cols, int max_cols, bool verbose, int num_threads, bool single_orbit) {
+// When `total_progress_bar`, first all colorings are calculated and then all orbits are searched. Otherwise, the orbits are searched per number of colors, each giving a new progress bar.
+legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int min_cols, int max_cols, bool verbose, bool total_progress_bar, int num_threads, bool single_orbit) {
     int n = adj.row_len;
 
     int64_t begin_time;
@@ -49,74 +52,80 @@ legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int min_
         free(duration);
     }
 
-    // Colorings: all colorings of specific #colors
     legal_orbits_result all_orbits = { .colorings = arr2d_fixed_create_empty(n, 10), .states = arr2d_var_create_empty(20, 10) };
 
-    for (int c=cmin; c<=cmax; c++) {
-        if (verbose) {
-            printf("\rTesting %d colors...", c);
-            fflush(stdout);
-            begin_time = millis();
-        }
+    // OPTION 1: First collect all colorings, then search for legal orbits
 
-        // Find colorings
-        arr2d_fixed cols = find_all_colorings(adj, c, partitions);
-        arr2d_fixed reduced = reduce_colorings(n, c, cols, isos, num_threads);
-        free_arrf(cols);
+    if (total_progress_bar) {
+        arr2d_fixed all_reduced = arr2d_fixed_create_empty(n, 10);
 
-        if (reduced.len == 0) {
+        begin_time = millis();
+        for (int c=cmin; c<=cmax; c++) {
+            if (verbose) {
+                printf("\rSearching %d-colorings...", c);
+                fflush(stdout);
+            }
+
+            // Find colorings
+            arr2d_fixed cols = find_all_colorings(adj, c, partitions);
+            arr2d_fixed reduced = reduce_colorings(n, c, cols, isos, num_threads);
+            all_reduced = append_arrf_multiple(all_reduced, reduced);
+            free_arrf(cols);
             free_arrf(reduced);
-            continue;
         }
 
         if (verbose) {
-            char* reduced_len = pretty_int(reduced.len);
-            snprintf(text,128,"\rTesting %s %d-colorings: ", reduced_len, c);
-            free(reduced_len);
+            char* num_cols = pretty_int(all_reduced.len);
+            snprintf(text,128,"\rTesting %s colorings: ", num_cols);
+            free(num_cols);
             printf(text);
             fflush(stdout);
         }
 
-        // Find legal orbits
-        uint64_t load_per_thread = (uint64_t)legal_states.len * (uint64_t)reduced.len / (uint64_t)MAX(1,num_threads);
-        bool progress_indicator = verbose && (load_per_thread > 500000000); // ~ 10s
+        // Do orbit search
+        all_orbits = do_orbit_search(n, legal_states, all_reduced, verbose, text, num_threads, single_orbit, begin_time);
+        free_arrf(all_reduced);
+    }
 
-        legal_orbits_calculation orbit_calc = find_legal_orbits(n, reduced, legal_states, num_threads, progress_indicator, single_orbit);
+    // OPTION 2: Search for legal orbits per #colors consecutively
 
-        // Show progress indicator
-        if (progress_indicator) {
-            do {
-                delay(500);
-                orbit_calc = calc_update(orbit_calc);
-                print_progress(orbit_calc, text);
-            } while (!orbit_calc.finished);
+    else {
+        for (int c=cmin; c<=cmax; c++) {
+            if (verbose) {
+                printf("\rTesting %d colors...", c);
+                fflush(stdout);
+                begin_time = millis();
+            }
+
+            // Find colorings
+            arr2d_fixed cols = find_all_colorings(adj, c, partitions);
+            arr2d_fixed reduced = reduce_colorings(n, c, cols, isos, num_threads);
+            free_arrf(cols);
+
+            if (reduced.len == 0) {
+                free_arrf(reduced);
+                continue;
+            }
+
+            if (verbose) {
+                char* reduced_len = pretty_int(reduced.len);
+                snprintf(text,128,"\rTesting %s %d-colorings: ", reduced_len, c);
+                free(reduced_len);
+                printf(text);
+                fflush(stdout);
+            }
+
+            // Do orbit search
+            legal_orbits_result orbits = do_orbit_search(n, legal_states, reduced, verbose, text, num_threads, single_orbit, begin_time);
+            bool found_orbit = orbits.colorings.len > 0;
+            all_orbits.colorings = append_arrf_multiple(all_orbits.colorings, orbits.colorings);
+            all_orbits.states = append_arrv_multiple(all_orbits.states, orbits.states);
+            free_arrf(reduced, orbits.colorings);
+            free_arrv(orbits.states);
+
+            if (found_orbit && single_orbit)
+                break;
         }
-
-        legal_orbits_result orbits = calc_finish(orbit_calc);
-        bool found_orbit = orbits.colorings.len > 0;
-
-        all_orbits.colorings = append_arrf_multiple(all_orbits.colorings, orbits.colorings);
-        all_orbits.states = append_arrv_multiple(all_orbits.states, orbits.states);
-
-        if (verbose) {
-            char* num_states = pretty_int(total_len_arrv(orbits.states));
-            char* num_colorings = pretty_int(orbits.colorings.len);
-            char* duration = pretty_ms(millis()-begin_time,true);
-            printf(text);
-            if (found_orbit)
-                printf("found %s legal orbits on %s colorings (took %s).\n", num_states, num_colorings, duration);
-            else
-                printf("no orbit found (took %s).\n", duration);
-            free(num_states);
-            free(num_colorings);
-            free(duration);
-        }
-
-        free_arrf(reduced, orbits.colorings);
-        free_arrv(orbits.states);
-
-        if (found_orbit && single_orbit)
-            break;
     }
 
     free_arrf(isos, legal_states);
@@ -125,23 +134,42 @@ legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int min_
     return all_orbits;
 }
 
-// Display the progress of the running calculation.
-void print_progress(legal_orbits_calculation calc, char* prefix) {
-    printf("\r");
-    printf(prefix);
+// Perform an orbit search with an optional progress indicator.
+legal_orbits_result do_orbit_search(int n, arr2d_fixed legal_states, arr2d_fixed colorings, bool verbose, char* text, int num_threads, bool single_orbit, uint64_t begin_time) {
+    bool progress_indicator = false;
+    if (verbose) {
+        uint64_t load_per_thread = (uint64_t)legal_states.len * (uint64_t)colorings.len / (uint64_t)MAX(1,num_threads);
+        progress_indicator = load_per_thread > 500000000; // ~ 10s
+    }
 
-    int percents = (int)(100*calc.progress);
-    int tenths = percents/10;
-    int ones = percents-10*tenths;
-    for (int i=0; i<tenths; i++)
-        printf("█");
-    if (tenths < 10)
-        (ones < 3) ? printf("░") : (ones < 7) ? printf("▒") : printf("▓");
-    for (int i=tenths+1; i<10; i++)
-        printf("░");
+    legal_orbits_calculation orbit_calc = find_legal_orbits(n, colorings, legal_states, num_threads, progress_indicator, single_orbit);
 
-    char* remaining = pretty_ms(calc.estimated_ms, false);
-    printf(" (%d%%, %s left)", percents, remaining);
-    free(remaining);
-    fflush(stdout);
+    // Show progress indicator
+    if (progress_indicator) {
+        do {
+            delay(1000);
+            orbit_calc = calc_update(orbit_calc);
+            print_progress(text, orbit_calc.progress, orbit_calc.estimated_ms);
+        } while (!orbit_calc.finished);
+    }
+
+    legal_orbits_result orbits = calc_finish(orbit_calc);
+    bool found_orbit = orbits.colorings.len > 0;
+
+    if (verbose) {
+        char* num_states = pretty_int(total_len_arrv(orbits.states));
+        char* num_colorings = pretty_int(orbits.colorings.len);
+        char* duration = pretty_ms(millis()-begin_time,true);
+        printf(text);
+        if (found_orbit)
+            printf("found %s legal orbits on %s colorings (took %s).\n", num_states, num_colorings, duration);
+        else
+            printf("no orbit found (took %s).\n", duration);
+        free(num_states);
+        free(num_colorings);
+        free(duration);
+    }
+
+    return orbits;
+}
 }

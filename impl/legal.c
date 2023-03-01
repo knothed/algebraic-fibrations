@@ -166,9 +166,9 @@ legal_orbits_calculation calc_update(legal_orbits_calculation calc) {
 
     uint64_t taken = millis()-calc.begin_ms;
     if (calc.progress > 0.001) {
-        calc.estimated_ms = (uint64_t) (((double)taken) * (1.0-calc.progress) / calc.progress);
+        calc.estimated_ms = (int64_t) (((double)taken) * (1.0-calc.progress) / calc.progress);
     } else {
-        calc.estimated_ms = 0;
+        calc.estimated_ms = -1;
     }
 
     return calc;
@@ -177,8 +177,10 @@ legal_orbits_calculation calc_update(legal_orbits_calculation calc) {
 // Wait for the worker threads to finish and return the result.
 // Frees any additional memory that was used by the threads.
 legal_orbits_result calc_finish(legal_orbits_calculation calc) {
-    for (int i=0; i<calc.num_threads; i++)
-        pthread_join(calc.pids[i], 0);
+    for (int i=0; i<calc.num_threads; i++) {
+        if (calc.pids[i]) pthread_join(calc.pids[i], 0); // else, single-threaded
+    }
+
 
     // Collect result
     int result_len = 0;
@@ -242,6 +244,7 @@ legal_orbits_calculation find_legal_orbits(int n, arr2d_fixed colorings, arr2d_f
                 exit(1);
             }
         } else { // single-threaded: don't create a new thread but perform the calculation here
+            pids[i] = 0;
             orbit_thread_enter(args);
         }
     }
