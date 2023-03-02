@@ -125,6 +125,60 @@ def all_reduced_colorings(g, num_cols, verbose=False, num_threads=1):
     return np_array_from_arrf(reduced)
 
 
+# Check multiple graphs using geng
+# /Users/david/Desktop/nauty/gengL
+def geng_test(n: int, geng: str, args: str = "", num_threads = 1, queue_capacity: int = 25, hyp_check: bint = 1, total: int = 0):
+    from sage.matrix.matrix_integer_dense import Matrix_integer_dense
+
+    # Create fifo and start geng > fifo
+    fifo = "/tmp/geng"
+    try: os.remove(fifo)
+    except OSError: pass
+    os.mkfifo(fifo)
+    subprocess.Popen([f'{geng} {n} {args} > {fifo}'], shell=True)
+
+    # Preparations
+    cdef arr2d_fixed adj;
+    cdef arr2d_var cliques;
+
+    pytext = (f"Checking {pretty_int(total).decode('utf8')} graphs: ").encode('UTF-8')
+    cdef char* text = pytext
+
+    cdef fibering_scheduler scheduler = make_scheduler(num_threads, queue_capacity)
+    mat_space = Mat(ZZ,n)
+
+    cdef int i = 0
+    start = time_ms()
+    with open(fifo, 'r') as f:
+        for line in iter(f.readline, ''):
+            i += 1
+            if (total > 0 and i % 1000 == 0):
+                print_progress(text, (<double>i)/(<double>total), -1)
+
+            # Read matrix
+            adj = arr2d_fixed_create_empty(n, n*n)
+            adj.len = n
+            read_adj_matrix_graph6(line.encode('ascii'), adj.data)
+            if (hyp_check and not is_graph_hyperbolic(adj)): continue
+
+            # Create Graph - required for all_cliques call.
+            # This is quite slow, better: make own all_cliques algorithm
+            l: list = [list(row) for row in np_array_from_arrf(adj)]
+            mat = Matrix_integer_dense.__new__(Matrix_integer_dense, mat_space)
+            mat.__init__(mat_space,l)
+            g = Graph(mat, format='adjacency_matrix')
+
+            # C stuff can be done multithreaded: add to scheduler
+            cliques_py = sorted(list(all_cliques(g,min_size=2)), key=len, reverse=True)
+            cliques = arrv_from_nested_list(cliques_py)
+
+            add_to_scheduler(scheduler, adj, cliques)
+
+    scheduler_finish(scheduler)
+
+    print(f"total took {time_ms()-start}ms")
+
+
 # ...
 
 
@@ -135,8 +189,16 @@ cdef extern from "impl/coloring.c":
     arr2d_fixed find_all_colorings(arr2d_fixed adj, int num_cols, arr2d_var partitions)
     arr2d_fixed reduce_colorings(int n, int num_colors, arr2d_fixed cols, arr2d_fixed isos, int num_threads)
 
-cdef extern from "impl/fibering.c":
+cdef extern from "impl/fibering_single.c":
     legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int min_cols, int max_cols, bint verbose, bint total_progress_bar, int num_threads, bint single_orbit)
+
+cdef extern from "impl/fibering_multi.c":
+    void read_adj_matrix_graph6(char* geng, int* adj)
+    ctypedef struct fibering_scheduler:
+        pass
+    fibering_scheduler make_scheduler(int num_threads, int capacity_per_thread)
+    void add_to_scheduler(fibering_scheduler scheduler, arr2d_fixed adj, arr2d_var cliques)
+    void scheduler_finish(fibering_scheduler scheduler)
 
 cdef extern from "impl/graph.c":
     bint is_graph_hyperbolic(arr2d_fixed adj)

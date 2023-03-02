@@ -1,13 +1,11 @@
 ///
-/// Graph fibering driver code that combines lower-level functionality in the correct way.
+/// Graph fibering driver code that combines lower-level functionality to perform a fibering check for a single graph.
 ///
 
 #include <stdio.h>
 #include <stdbool.h>
 #include "functionality.h"
 #include "utils.h"
-
-/******** SINGLE GRAPH FIBERING ********/
 
 legal_orbits_result do_orbit_search(int n, arr2d_fixed legal_states, arr2d_fixed colorings, bool verbose, char* text, int num_threads, bool single_orbit, uint64_t begin_time);
 
@@ -171,5 +169,4 @@ legal_orbits_result do_orbit_search(int n, arr2d_fixed legal_states, arr2d_fixed
     }
 
     return orbits;
-}
 }
