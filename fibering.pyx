@@ -213,9 +213,10 @@ cdef extern from "impl/utils.c":
     void free_arrf(...)
     void print_arrf(arr2d_fixed arr)
     arr2d_fixed arr2d_fixed_create_from(int* data, int row_len, int len)
+    arr2d_fixed arr2d_fixed_create_empty(int row_len, int capacity);
 
     ctypedef struct arr2d_var:
-        pass
+        int len
     int get_arrv(arr2d_var arr, int i, int j)
     int size_arrv(arr2d_var arr, int i)
     void free_arrv(...)

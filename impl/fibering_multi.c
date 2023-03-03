@@ -17,8 +17,8 @@ void read_adj_matrix_graph6(char* geng, int* adj) {
     char idx2 = 0;
     char chr = 0;
     chr = geng[idx1] - 63;
-    for (int i=0; i<n; i++) {
-        for (int j=i+1; j<n; j++) {
+    for (int i=1; i<n; i++) {
+        for (int j=0; j<i; j++) {
             int v = (int)((chr >> (5-idx2)) & 1);
             adj[n*i+j] = v;
             adj[n*j+i] = v;
@@ -30,6 +30,36 @@ void read_adj_matrix_graph6(char* geng, int* adj) {
             }
         }
     }
+}
+
+char* graph6_from_adj_matrix(arr2d_fixed adj) {
+    int n = adj.len;
+    char* res = malloc(3 + n*(n-1)/12);
+    res[0] = n+63;
+
+    char curr = 0;
+    char idx1 = 1;
+    char idx2 = 0;
+    for (int i=1; i<n; i++) {
+        for (int j=0; j<i; j++) {
+            curr += get_arrf(adj,i,j) << (5-idx2);
+
+            idx2++;
+            if (idx2 == 6) {
+                res[idx1] = curr + 63;
+                idx2 = 0; idx1++;
+                curr = 0;
+            }
+        }
+    }
+
+    if (idx2 > 0) {
+        res[idx1] = curr + 63;
+        idx1++;
+    }
+    res[idx1] = '\0';
+
+    return res;
 }
 
 // A queue on which a stream of fibering calculations is performed.
