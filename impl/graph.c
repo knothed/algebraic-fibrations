@@ -68,7 +68,7 @@ bool is_graph_hyperbolic(arr2d_fixed adj) {
 
 /******** GRAPH ISOMETRIES ********/
 
-arr2d_fixed get_isometries_impl(arr2d_fixed adj, arr2d_fixed isometries, int current_iso[], int level);
+arr2d_fixed get_isometries_impl(arr2d_fixed adj, arr2d_fixed isometries, int current_iso[], int image_bits, int level);
 
 // Calculate all isometries of the graph.
 // The graph is given by its adjacency matrix in contiguous form, n successive entries making a row.
@@ -77,10 +77,10 @@ arr2d_fixed get_isometries(arr2d_fixed adj) {
     int current_iso[n];
     memset(current_iso,0,n*sizeof(int));
     arr2d_fixed result = arr2d_fixed_create_empty(n, 10);
-    return get_isometries_impl(adj, result, current_iso, 0);
+    return get_isometries_impl(adj, result, current_iso, 0, 0);
 }
 
-arr2d_fixed get_isometries_impl(arr2d_fixed adj, arr2d_fixed isometries, int current_iso[], int level) {
+arr2d_fixed get_isometries_impl(arr2d_fixed adj, arr2d_fixed isometries, int current_iso[], int image_bits, int level) {
     int n = adj.len;
 
     // Add isometry
@@ -90,16 +90,7 @@ arr2d_fixed get_isometries_impl(arr2d_fixed adj, arr2d_fixed isometries, int cur
     // insert 'i' somewhere into current_iso
     for (int i=0; i<n; i++) {
         // check whether current_iso already contains i
-        bool contains_i = false;
-        for (int j=0; j<level; j++) {
-            if (current_iso[j] == i) {
-                contains_i = true;
-                break;
-            }
-        }
-
-        if (contains_i)
-            continue;
+        if ((image_bits >> i) & 1) continue;
 
         // check whether adding i at position level would preserve all edges
         bool is_ok = true;
@@ -113,7 +104,8 @@ arr2d_fixed get_isometries_impl(arr2d_fixed adj, arr2d_fixed isometries, int cur
         // add i to current_iso and recurse
         if (is_ok) {
             current_iso[level] = i;
-            isometries = get_isometries_impl(adj, isometries, current_iso, level+1);
+            int new_image = image_bits + (1 << i);
+            isometries = get_isometries_impl(adj, isometries, current_iso, new_image, level+1);
         }
     }
 

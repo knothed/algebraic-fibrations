@@ -139,6 +139,14 @@ def all_reduced_colorings(g, num_cols, verbose=False, num_threads=1):
     free_arrv(cliques, partitions)
     return np_array_from_arrf(reduced)
 
+# Get the number of isometries of a graph
+def num_isometries(g):
+    cdef arr2d_fixed adj = arrf_from_adj_matrix(g.adjacency_matrix())
+    cdef arr2d_fixed isos = get_isometries(adj)
+    count = isos.len
+    free_arrf(adj, isos)
+    return count
+
 
 #### GENG: MULTIPLE GRAPHS ####
 
@@ -146,7 +154,7 @@ def all_reduced_colorings(g, num_cols, verbose=False, num_threads=1):
 # When hyp_check, only hyperbolic graphs are checked.
 # Returns all the graphs which fiber. Optionally, writes them to a file in graph6 format.
 # Sensible args are: -c (connected), '{2*n-4}:0' (minimum edges)
-def geng_fibering(n: int, geng: str, args: str, num_queues: int, queue_capacity: int, threads_per_queue: int, hyp_check: bint = 1, total: int = 0, write_to_file: str = ""):
+def geng_fibering(n: int, geng: str, args: str, num_queues: int, queue_capacity: int, threads_per_queue: int, hyp_check: bint = 1, min_isos: int = 0, total: int = 0, write_to_file: str = ""):
     # Create fifo and start geng > fifo
     fifo = "/tmp/geng"
     try: os.remove(fifo)
@@ -176,7 +184,12 @@ def geng_fibering(n: int, geng: str, args: str, num_queues: int, queue_capacity:
             adj = arr2d_fixed_create_empty(n, n*n)
             adj.len = n
             read_adj_matrix_graph6(line.encode('ascii'), adj.data)
+
             if (hyp_check and not is_graph_hyperbolic(adj)): continue
+            if (min_isos > 1):
+                isos = get_isometries(adj)
+                free_arrf(isos)
+                if isos.len < min_isos: continue
 
             # Create Graph - required for all_cliques call.
             # This is quite slow, better: make own all_cliques algorithm
