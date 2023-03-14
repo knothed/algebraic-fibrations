@@ -249,12 +249,12 @@ static inline void swap_char(char *a, char *b) {
 // Convert a timespan, given in milliseconds, into a more human readable form.
 char* pretty_ms(uint64_t ms, bool subsecond_precision) {
     char* result = malloc(8*sizeof(char));
-    uint64_t s = (ms+500)/1000;
+    uint64_t s = ms/1000;
 
-    if (subsecond_precision && ms+5 < 1000) {
-        snprintf(result, 8, "%.2fs", ((double)ms+5)/1000.0);
-    } else if (subsecond_precision && ms+50 < 10 * 1000) {
-        snprintf(result, 8, "%.1fs", ((double)ms+50)/1000.0);
+    if (subsecond_precision && ms < 1000) {
+        snprintf(result, 8, "%.2fs", ((double)ms)/1000.0);
+    } else if (subsecond_precision && ms < 10 * 1000) {
+        snprintf(result, 8, "%.1fs", ((double)ms)/1000.0);
     } else if (s < 600) {
         snprintf(result, 8, "%llds", s);
     } else if (s < 600*600) {

@@ -14,6 +14,9 @@ cimport numpy as np
 np.import_array()
 import ctypes
 
+from sage.matrix.matrix_integer_dense import Matrix_integer_dense
+import subprocess
+
 #### VIRTUAL ALGEBRAIC FIBERING: LEGAL ORBIT SEARCH ####
 
 # Determine (by brute force) whether a graph virtually algebraically fibers. Only consider colorings with up to max_cols colors, if desired.
@@ -68,7 +71,6 @@ def all_legal_orbits(g, min_cols=0, max_cols=0, verbose=True, total_progress_bar
     cdef legal_orbits_result orbits = graph_fiberings(adj, cliques, min_cols, max_cols, verbose, total_progress_bar, num_threads, false)
 
     # Convert to list
-    now = time_ms()
     result = [0] * orbits.colorings.len
     cdef int i
     for i in range(orbits.colorings.len):
@@ -81,6 +83,19 @@ def all_legal_orbits(g, min_cols=0, max_cols=0, verbose=True, total_progress_bar
 
     free_arrf(adj, orbits.colorings)
     free_arrv(cliques, orbits.states)
+    return result
+
+# Find all legal orbits for a single coloring.
+def legal_orbits_for_coloring(g, coloring_py):
+    cdef arr2d_fixed adj = arrf_from_adj_matrix(g.adjacency_matrix())
+    cdef int* coloring = list_to_array(coloring_py)
+
+    cdef legal_orbits_result orbits = graph_fiberings_single_coloring(adj, coloring)
+    result = [] if orbits.states.len == 0 else list_from_arrv_row(orbits.states, 0)
+
+    free(coloring)
+    free_arrf(adj, orbits.colorings)
+    free_arrv(orbits.states)
     return result
 
 
@@ -125,34 +140,36 @@ def all_reduced_colorings(g, num_cols, verbose=False, num_threads=1):
     return np_array_from_arrf(reduced)
 
 
-# Check multiple graphs using geng
-# /Users/david/Desktop/nauty/gengL
-def geng_test(n: int, geng: str, args: str = "", num_threads = 1, queue_capacity: int = 25, hyp_check: bint = 1, total: int = 0):
-    from sage.matrix.matrix_integer_dense import Matrix_integer_dense
+#### GENG: MULTIPLE GRAPHS ####
 
+# Use geng to produce a stream of graphs, each of which is checked for fibering.
+# When hyp_check, only hyperbolic graphs are checked.
+# Returns all the graphs which fiber. Optionally, writes them to a file in graph6 format.
+# Sensible args are: -c (connected), '{2*n-4}:0' (minimum edges)
+def geng_fibering(n: int, geng: str, args: str, num_queues: int, queue_capacity: int, threads_per_queue: int, hyp_check: bint = 1, total: int = 0, write_to_file: str = ""):
     # Create fifo and start geng > fifo
     fifo = "/tmp/geng"
     try: os.remove(fifo)
     except OSError: pass
     os.mkfifo(fifo)
-    subprocess.Popen([f'{geng} {n} {args} > {fifo}'], shell=True)
+    subprocess.Popen([f'{geng} {n} -c {args} > {fifo}'], shell=True)
 
     # Preparations
     cdef arr2d_fixed adj;
     cdef arr2d_var cliques;
+    cdef int i = 0
+    cdef int step = max(1, total/100)
 
+    cdef fibering_scheduler scheduler = make_scheduler(n, num_queues, queue_capacity, threads_per_queue, write_to_file.encode('UTF-8'))
+
+    mat_space = Mat(ZZ,n)
     pytext = (f"Checking {pretty_int(total).decode('utf8')} graphs: ").encode('UTF-8')
     cdef char* text = pytext
 
-    cdef fibering_scheduler scheduler = make_scheduler(num_threads, queue_capacity)
-    mat_space = Mat(ZZ,n)
-
-    cdef int i = 0
-    start = time_ms()
     with open(fifo, 'r') as f:
         for line in iter(f.readline, ''):
             i += 1
-            if (total > 0 and i % 1000 == 0):
+            if (total > 0 and i % step == 0):
                 print_progress(text, (<double>i)/(<double>total), -1)
 
             # Read matrix
@@ -163,46 +180,50 @@ def geng_test(n: int, geng: str, args: str = "", num_threads = 1, queue_capacity
 
             # Create Graph - required for all_cliques call.
             # This is quite slow, better: make own all_cliques algorithm
-            l: list = [list(row) for row in np_array_from_arrf(adj)]
-            mat = Matrix_integer_dense.__new__(Matrix_integer_dense, mat_space)
-            mat.__init__(mat_space,l)
-            g = Graph(mat, format='adjacency_matrix')
+            g = graph_from_arrf(adj, mat_space)
 
-            # C stuff can be done multithreaded: add to scheduler
+            # C stuff is done multithreaded: add to scheduler
             cliques_py = sorted(list(all_cliques(g,min_size=2)), key=len, reverse=True)
             cliques = arrv_from_nested_list(cliques_py)
 
             add_to_scheduler(scheduler, adj, cliques)
 
-    scheduler_finish(scheduler)
+    # Convert to graphs
+    graphs = []
+    cdef stream_result res = scheduler_finish(scheduler)
+    res.results.len = n # tweak so that each graph_from_arrf call returns a single graph
+    cdef int offset = n*n
+    for i in range(res.num_fiber):
+        g = graph_from_arrf(res.results,mat_space)
+        # g = graph_from_graph6(graph6_from_adj_matrix(res.results).decode('ascii'), n)
+        graphs.append(g)
+        res.results.data = res.results.data + <intptr_t> offset
+    return graphs
 
-    print(f"total took {time_ms()-start}ms")
+# Do not free the original adjacency matrix after calling this.
+cdef graph_from_arrf(adj: arr2d_fixed, mat_space):
+    l: list = [list(row) for row in np_array_from_arrf(adj)]
+    mat = Matrix_integer_dense.__new__(Matrix_integer_dense, mat_space)
+    mat.__init__(mat_space,l)
+    return Graph(mat, format='adjacency_matrix')
 
+# Convert Graph -> graph6
+def graph6_from_graph(g):
+    cdef arr2d_fixed adj = arrf_from_adj_matrix(g.adjacency_matrix())
+    cdef char* res = graph6_from_adj_matrix(adj);
+    free_arrf(adj)
+    return res.decode('utf-8');
 
-# ...
+# Convert graph6 -> Graph
+def graph_from_graph6(g6,n):
+    cdef arr2d_fixed adj = arr2d_fixed_create_empty(n, n*n)
+    adj.len = n
+    read_adj_matrix_graph6(g6.encode('ascii'), adj.data)
+    mat_space = Mat(ZZ,n)
+    return graph_from_arrf(adj, mat_space)
 
 
 #### C IMPORTS ####
-
-cdef extern from "impl/coloring.c":
-    arr2d_var cliquewise_vertex_partition(int n, arr2d_var cliques); # todo: remove this function entirely and just focus on a single largest clique
-    arr2d_fixed find_all_colorings(arr2d_fixed adj, int num_cols, arr2d_var partitions)
-    arr2d_fixed reduce_colorings(int n, int num_colors, arr2d_fixed cols, arr2d_fixed isos, int num_threads)
-
-cdef extern from "impl/fibering_single.c":
-    legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int min_cols, int max_cols, bint verbose, bint total_progress_bar, int num_threads, bint single_orbit)
-
-cdef extern from "impl/fibering_multi.c":
-    void read_adj_matrix_graph6(char* geng, int* adj)
-    ctypedef struct fibering_scheduler:
-        pass
-    fibering_scheduler make_scheduler(int num_threads, int capacity_per_thread)
-    void add_to_scheduler(fibering_scheduler scheduler, arr2d_fixed adj, arr2d_var cliques)
-    void scheduler_finish(fibering_scheduler scheduler)
-
-cdef extern from "impl/graph.c":
-    bint is_graph_hyperbolic(arr2d_fixed adj)
-    arr2d_fixed get_isometries(arr2d_fixed adj)
 
 cdef extern from "impl/utils.c":
     ctypedef struct arr2d_fixed:
@@ -228,14 +249,41 @@ cdef extern from "impl/utils.c":
     char* pretty_int(int num)
     void print_progress(char* prefix, double progress, int64_t estimated_ms);
 
+cdef extern from "impl/coloring.c":
+    arr2d_var cliquewise_vertex_partition(int n, arr2d_var cliques); # todo: remove this function entirely and just focus on a single largest clique
+    arr2d_fixed find_all_colorings(arr2d_fixed adj, int num_cols, arr2d_var partitions)
+    arr2d_fixed reduce_colorings(int n, int num_colors, arr2d_fixed cols, arr2d_fixed isos, int num_threads)
+
+cdef extern from "impl/fibering_single.c":
+    legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int min_cols, int max_cols, bint verbose, bint total_progress_bar, int num_threads, bint single_orbit)
+    legal_orbits_result graph_fiberings_single_coloring(arr2d_fixed adj, int* coloring);
+
+cdef extern from "impl/fibering_multi.c":
+    void read_adj_matrix_graph6(char* geng, int* adj)
+    char* graph6_from_adj_matrix(arr2d_fixed adj);
+    ctypedef struct fibering_scheduler:
+        pass
+    ctypedef struct stream_result:
+        arr2d_fixed results
+        int num_checked
+        int num_fiber
+    fibering_scheduler make_scheduler(int n, int num_queues, int capacity_per_queue, int threads_per_queue, char* results_file_str)
+    void add_to_scheduler(fibering_scheduler scheduler, arr2d_fixed adj, arr2d_var cliques)
+    stream_result scheduler_finish(fibering_scheduler scheduler)
+
+cdef extern from "impl/graph.c":
+    bint graph_can_fiber(arr2d_fixed adj)
+    bint is_graph_hyperbolic(arr2d_fixed adj)
+    arr2d_fixed get_isometries(arr2d_fixed adj)
+
 cdef extern from "impl/legal.c":
     ctypedef struct legal_orbits_result:
         arr2d_fixed colorings
         arr2d_var states
 
+
 #### ARRAY CONVERSION ####
 
-# todo: test speed of list_to_array etc.
 def time_ms():
     import time
     return time.time_ns() // 1000000

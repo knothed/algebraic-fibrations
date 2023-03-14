@@ -1,5 +1,5 @@
 ///
-/// Code that interacts with geng to check a stream of graphs for fibering.
+/// Code that is used to check a stream of graphs (from geng) for fibering.
 ///
 
 #include <stdio.h>
@@ -69,19 +69,27 @@ typedef struct {
     int start; // set by the worker thread
     int end; // set by the scheduler
     bool stop; // set by the scheduler
+    int threads;
 
     arr2d_fixed* adj_data;
     arr2d_var* cliques_data;
 
-    int hyp_count;
-    int result_count; // set by the worker thread
+    int checked_count;
+    arr2d_fixed results; // all fibering graphs, consecutively
+
+    FILE* results_file;
+    pthread_mutex_t* mutex;
 
     uint64_t work_time;
+    uint64_t wait_time;
 } fibering_queue;
 
 typedef struct {
+    int n;
     int num_queues;
     fibering_queue** queues;
+    uint64_t* wait_time; // all queues are full
+    int64_t creation_time;
 } fibering_scheduler;
 
 // Queue loop running on a thread: wait for graphs coming in the queue and process them
@@ -93,24 +101,34 @@ void* queue_run(void* arg) {
             // wait a bit.
             // not too short, else waiting wastes CPU cycles
             // not too long, else waiting time adversely affects total speed
-            delay(2);
+            delay(3);
+            queue->wait_time += 3;
 
             // exit the loop only when all remaining tasks have been processed
             if (queue->stop && queue->start == queue->end)
                 break;
         }
         else {
-            // printf("%d, %lld\n",queue->end-queue->start, millis()-t);
             int64_t t = millis();
             arr2d_fixed adj = queue->adj_data[queue->start];
             if (true) {
-                queue->hyp_count++;
-                legal_orbits_result orbits = graph_fiberings(adj, queue->cliques_data[queue->start], 0, 0, false, false, 3, true);
+                queue->checked_count++;
+                legal_orbits_result orbits = graph_fiberings(adj, queue->cliques_data[queue->start], 0, 0, false, false, queue->threads, true);
                 bool fibers = orbits.colorings.len > 0;
                 free_arrf(orbits.colorings);
                 free_arrv(orbits.states);
-                if (fibers)
-                    queue->result_count++;
+
+                if (fibers) {
+                    queue->results = append_arrf_multiple(queue->results, adj);
+                    if (queue->results_file > 0) {
+                        char* str = graph6_from_adj_matrix(adj);
+                        pthread_mutex_lock(queue->mutex);
+                        fputs(str, queue->results_file);
+                        fputs("\n", queue->results_file);
+                        fflush(queue->results_file);
+                        pthread_mutex_unlock(queue->mutex);
+                    }
+                }
             }
 
             free_arrf(adj);
@@ -125,23 +143,44 @@ void* queue_run(void* arg) {
     }
 }
 
-// Create num_threads worker threads waiting for graphs to process.
-fibering_scheduler make_scheduler(int num_threads, int capacity_per_thread) {
+// Create num_threads worker threads waiting for graphs to process. All graphs must have the same number of vertices.
+fibering_scheduler make_scheduler(int n, int num_queues, int capacity_per_queue, int threads_per_queue, char* results_file_str) {
     fibering_scheduler result;
-    result.queues = malloc(num_threads*sizeof(fibering_queue*));
-    result.num_queues = num_threads;
+    result.n = n;
+    result.queues = malloc(num_queues*sizeof(fibering_queue*));
+    result.num_queues = num_queues;
+    result.wait_time = malloc(sizeof(uint64_t));
+    *result.wait_time = 0;
+    result.creation_time = millis();
+    int capacity = capacity_per_queue + 1; // implementation detail
 
-    for (int i=0; i<num_threads; i++) {
+    // Create file & mutex
+    pthread_mutex_t* mutex = malloc(sizeof(pthread_mutex_t));
+    pthread_mutex_init(mutex, NULL);
+    FILE* results_file = 0;
+    if (strlen(results_file_str)) {
+        results_file = fopen(results_file_str, "a");
+        if (results_file <= 0) {
+            fprintf(stderr, "File %s couldn't be opened\n", results_file_str);
+            exit(1);
+        }
+    }
+
+    for (int i=0; i<num_queues; i++) {
         fibering_queue* queue = malloc(sizeof(fibering_queue));
-        queue->capacity = capacity_per_thread;
+        queue->capacity = capacity;
+        queue->threads = threads_per_queue;
         queue->start = 0;
         queue->end = 0;
         queue->stop = false;
-        queue->adj_data = malloc(capacity_per_thread*sizeof(arr2d_fixed));
-        queue->cliques_data = malloc(capacity_per_thread*sizeof(arr2d_var));
-        queue->hyp_count = 0;
-        queue->result_count = 0;
+        queue->adj_data = malloc(capacity*sizeof(arr2d_fixed));
+        queue->cliques_data = malloc(capacity*sizeof(arr2d_var));
+        queue->checked_count = 0;
+        queue->results = arr2d_fixed_create_empty(n,n);
+        queue->results_file = results_file;
+        queue->mutex = mutex;
         queue->work_time = 0;
+        queue->wait_time = 0;
 
         if (pthread_create(&queue->pid,0,&queue_run,queue)) {
             fprintf(stderr, "error: thread couldn't be created\n");
@@ -166,7 +205,8 @@ void add_to_scheduler(fibering_scheduler scheduler, arr2d_fixed adj, arr2d_var c
                 goto out;
             }
         }
-        delay(5);
+        delay(3);
+        (*scheduler.wait_time) += 3;
     }
     out: if (0) {}
 
@@ -184,9 +224,15 @@ void add_to_scheduler(fibering_scheduler scheduler, arr2d_fixed adj, arr2d_var c
     }
 }
 
+typedef struct {
+    int num_checked; // graphs checked for fibering
+    int num_fiber;
+    arr2d_fixed results;
+} stream_result;
+
 // Signal the scheduler that no new graphs will come in.
-// Wait for all the worker threads to finish and return the result.
-void scheduler_finish(fibering_scheduler scheduler) {
+// Wait for all the worker threads to finish; then print work stats and return the result.
+stream_result scheduler_finish(fibering_scheduler scheduler) {
     // Wait for queues to finish
     for (int i=0; i<scheduler.num_queues; i++)
         scheduler.queues[i]->stop = true;
@@ -194,18 +240,50 @@ void scheduler_finish(fibering_scheduler scheduler) {
         pthread_join(scheduler.queues[i]->pid, 0);
 
     // Collect result
-    int total_hyp = 0;
-    int total_fiber = 0;
+    stream_result result;
+    result.num_checked = 0;
+    result.results = arr2d_fixed_create_empty(scheduler.n, scheduler.n);
     uint64_t total_work_time = 0;
-    for (int i=0; i<scheduler.num_queues; i++) {
-        total_hyp += scheduler.queues[i]->hyp_count;
-        total_fiber += scheduler.queues[i]->result_count;
-        total_work_time += scheduler.queues[i]->work_time;
-    }
-    printf("finished. hyp: %d, fiber: %d, c-work: %lld\n", total_hyp, total_fiber, total_work_time);
 
     for (int i=0; i<scheduler.num_queues; i++) {
-        printf("q %d: %lld ", i, scheduler.queues[i]->work_time);
-        if (i<scheduler.num_queues-1) printf("; "); else printf("\n");
+        result.num_checked += scheduler.queues[i]->checked_count;
+        result.results = append_arrf_multiple(result.results, scheduler.queues[i]->results);
+        total_work_time += scheduler.queues[i]->work_time;
     }
+    result.num_fiber = result.results.len / scheduler.n;
+
+    if (scheduler.queues[0]->results_file > 0)
+        fclose(scheduler.queues[0]->results_file);
+
+    // Print stats
+    printf("\nStreaming finished. Graphs checked: %d, %d of which fiber(s).\n", result.num_checked, result.num_fiber);
+    char* total = pretty_ms(millis() - scheduler.creation_time, true);
+    printf("Took %s in total.\n", total);
+
+    char* work = pretty_ms(total_work_time, true);
+    printf(" • raw search time: %s (queue distribution: ", work);
+    for (int i=0; i<scheduler.num_queues; i++) {
+        char* time = pretty_ms(scheduler.queues[i]->work_time, true);
+        printf("%s", time);
+        if (i<scheduler.num_queues-1) printf(", ");
+        free(time);
+    }
+    printf(")\n");
+
+    char* full = pretty_ms(*scheduler.wait_time, true);
+    printf(" • all queues full: %s\n", full);
+    printf(" • queues empty: ");
+    for (int i=0; i<scheduler.num_queues; i++) {
+        char* time = pretty_ms(scheduler.queues[i]->wait_time, true);
+        printf("%s", time);
+        if (i<scheduler.num_queues-1) printf(", ");
+        free(time);
+    }
+    printf("\n");
+
+    free(total);
+    free(work);
+    free(full);
+
+    return result;
 }

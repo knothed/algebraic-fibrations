@@ -21,7 +21,7 @@ int num_colors_upper_bound(int n, arr2d_var cliques, arr2d_fixed legal_states) {
     // 1. Remove cliques that are contained in other cliques
     // (Attention: this is O(n^2) in #cliques! But hopefully it is worth it to speed up part 2 of the algorithm)
     arr2d_var reduced = arr2d_var_create_empty(total_len_arrv(cliques)/2, cliques.len/3);
-int64_t now = millis();
+
     // Convert cliques into bitmasks for fast containment checking
     int clique_masks[cliques.len];
     memset(clique_masks,0,cliques.len*sizeof(int));
