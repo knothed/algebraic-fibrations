@@ -7,7 +7,7 @@
 
 int64_t millis() {
     struct timespec now;
-    clock_gettime(CLOCK_REALTIME, &now);
+    clock_gettime(CLOCK_MONOTONIC, &now);
     return ((int64_t) now.tv_sec) * 1000 + ((int64_t) now.tv_nsec) / 1000000;
 }
 
@@ -249,7 +249,7 @@ static inline void swap_char(char *a, char *b) {
 // Convert a timespan, given in milliseconds, into a more human readable form.
 char* pretty_ms(uint64_t ms, bool subsecond_precision) {
     char* result = malloc(8*sizeof(char));
-    uint64_t s = ms/1000;
+    uint64_t s = (ms+500)/1000;
 
     if (subsecond_precision && ms < 1000) {
         snprintf(result, 8, "%.2fs", ((double)ms)/1000.0);
@@ -300,8 +300,8 @@ void print_progress(char* prefix, double progress, int64_t estimated_ms) {
     printf(prefix);
 
     int percents = (int)(100*progress);
-    int tenths = percents/10;
-    int ones = percents-10*tenths;
+    int tenths = MIN(10,percents/10);
+    int ones = MIN(10,percents-10*tenths);
     for (int i=0; i<tenths; i++)
         printf("█");
     if (tenths < 10)

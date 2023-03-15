@@ -21,6 +21,8 @@ bool is_graph_hyperbolic(arr2d_fixed adj);
 arr2d_fixed get_isometries(arr2d_fixed adj);
 
 // legal.c
+arr2d_fixed all_legal_states(arr2d_fixed adj, arr2d_fixed isos);
+
 typedef struct {
     // all colorings for which there are legal orbits
     arr2d_fixed colorings;
@@ -60,9 +62,7 @@ typedef struct {
     uint64_t begin_ms;
 } legal_orbits_calculation;
 
-arr2d_fixed all_legal_states(arr2d_fixed adj, arr2d_fixed isos);
 legal_orbits_calculation find_legal_orbits(int n, arr2d_fixed colorings, arr2d_fixed legal_states, int num_threads, bool force_threaded, bool stop_after_first);
-
 legal_orbits_calculation calc_update(legal_orbits_calculation calc);
 legal_orbits_result calc_finish(legal_orbits_calculation calc);
 

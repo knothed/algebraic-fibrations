@@ -21,7 +21,7 @@ import subprocess
 
 # Determine (by brute force) whether a graph virtually algebraically fibers. Only consider colorings with up to max_cols colors, if desired.
 # Split up the parallelizable work into multiple threads, if desired.
-def has_legal_orbit(g, min_cols=0, max_cols=0, verbose=True, total_progress_bar=True, num_threads=1):
+def has_legal_orbit(g, min_cols=0, max_cols=0, verbose=True, total_progress_bar=False, num_threads=1):
     cdef int n = g.order()
 
     cdef arr2d_fixed adj = arrf_from_adj_matrix(g.adjacency_matrix())
@@ -174,22 +174,30 @@ def geng_fibering(n: int, geng: str, args: str, num_queues: int, queue_capacity:
     pytext = (f"Checking {pretty_int(total).decode('utf8')} graphs: ").encode('UTF-8')
     cdef char* text = pytext
 
+    begin_time = time_ms()
     with open(fifo, 'r') as f:
         for line in iter(f.readline, ''):
             i += 1
             if (total > 0 and i % step == 0):
-                print_progress(text, (<double>i)/(<double>total), -1)
+                taken = time_ms() - begin_time
+                progress = (<double>i) / (<double>total)
+                estimated = (<double>taken) * (1.0-progress) / progress
+                print_progress(text, progress, <int64_t>estimated)
 
             # Read matrix
             adj = arr2d_fixed_create_empty(n, n*n)
             adj.len = n
             read_adj_matrix_graph6(line.encode('ascii'), adj.data)
 
-            if (hyp_check and not is_graph_hyperbolic(adj)): continue
+            if (hyp_check and not is_graph_hyperbolic(adj)):
+                free_arrf(adj)
+                continue
             if (min_isos > 1):
-                isos = get_isometries(adj)
+                isos = get_isometries(adj) # maybe: use them in add_to_scheduler? because this takes quite long
                 free_arrf(isos)
-                if isos.len < min_isos: continue
+                if isos.len < min_isos:
+                    free_arrf(adj)
+                    continue
 
             # Create Graph - required for all_cliques call.
             # This is quite slow, better: make own all_cliques algorithm

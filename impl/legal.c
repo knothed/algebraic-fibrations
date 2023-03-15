@@ -106,32 +106,26 @@ bfs_queue queue_delete(bfs_queue queue, int* v) {
 }
 
 bool subgraph_connected(arr2d_fixed adj, int sub_size, int vertices[]) {
-    bool visited[sub_size];
-    memset(visited,0,sub_size*sizeof(bool));
+    int visited = 0;
+    int all = (1 << sub_size) - 1;
 
     int v = 0;
     bfs_queue queue = {.front = -1, .rear = -1};
     queue = queue_insert(queue, v); // we label the vertices (0, ..., sub_size-1) and then translate via `vertices`
+    visited += (1 << v);
 
     // Do BFS
-    while (!queue_empty(queue)) {
+    while (!queue_empty(queue) && visited != all) {
         queue = queue_delete(queue, &v);
-        visited[v] = 1;
         for (int i=0; i<sub_size; i++) { // add adjacent unvisited vertices to queue
-            if (!visited[i] & get_arrf(adj,vertices[v],vertices[i])) {
-                visited[i] = 1;
+            if (!((visited >> i) & 1) && get_arrf(adj,vertices[v],vertices[i])) {
+                visited += (1 << i);
                 queue = queue_insert(queue, i);
             }
         }
     }
 
-    // Check if all vertices have been visited
-    for (int i=1; i<sub_size; i++) {
-        if (!visited[i])
-            return false;
-    }
-
-    return true;
+    return visited == all;
 }
 
 /******** LEGAL ORBITS ********/
@@ -177,10 +171,9 @@ legal_orbits_calculation calc_update(legal_orbits_calculation calc) {
 // Wait for the worker threads to finish and return the result.
 // Frees any additional memory that was used by the threads.
 legal_orbits_result calc_finish(legal_orbits_calculation calc) {
-    for (int i=0; i<calc.num_threads; i++) {
-        if (calc.pids[i]) pthread_join(calc.pids[i], 0); // else, single-threaded
-    }
-
+    for (int i=0; i<calc.num_threads; i++)
+        if (calc.pids[i]) // else, single-threaded
+            pthread_join(calc.pids[i], 0);
 
     // Collect result
     int result_len = 0;
@@ -276,11 +269,11 @@ static inline legal_orbits_result find_legal_orbits_single(int n, int* coloring,
     // Go through all legal states until none are left
     int max_states = 1 << (n-1);
     int idx = 0;
-    int remaining = legal_states.len;
     int orbit_size = 1 << num_cols;
     int half_orbit_size = orbit_size >> 1;
+    int remaining = legal_states.len - half_orbit_size;
 
-    while (remaining >= half_orbit_size) {
+    while (remaining >= 0) {
         int state = get_arrf1d(legal_states,idx);
         if (!legal[state]) {
             idx++;
