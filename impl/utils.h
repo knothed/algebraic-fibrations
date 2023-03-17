@@ -11,12 +11,16 @@
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 
-static inline int log2_int(int a) {
+static inline int log2_int64(int64_t a) {
     if (a <= 0) return -1;
     int r = 0;
     int b = a;
     while (b >>= 1) r++;
     return r;
+}
+
+static inline int log2_int(int a) {
+    return log2_int64((int64_t)a);
 }
 
 int64_t millis();
@@ -159,7 +163,7 @@ arr2d_fixed do_ordered_choose(int n, int k, int* ptr);
 char* pretty_ms(uint64_t ms, bool subsecond_precision);
 
 // Equip a nonnegative integer with thousands delimiters.
-char* pretty_int(int num);
+char* pretty_int(int64_t num);
 
 // Print a progress bar onto the current line.
 void print_progress(char* prefix, double progress, int64_t estimated_ms);

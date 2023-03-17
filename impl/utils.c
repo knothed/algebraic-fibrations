@@ -267,16 +267,17 @@ char* pretty_ms(uint64_t ms, bool subsecond_precision) {
 }
 
 // Equip a nonnegative integer with thousands delimiters.
-char* pretty_int(int num) {
-    int len = 3+log2_int(num)/2;
+char* pretty_int(int64_t num) {
+    int len = 3+log2_int64(num)/2;
     char* result = malloc(len*sizeof(char));
 
     // Write string into buffer
     int i=0; int j=0;
+    int64_t ten = (int64_t)10;
     do {
-        int digit = num%10;
+        int digit = (int)(num%ten);
         result[i+j] = digit+'0';
-        num /= 10;
+        num /= ten;
 
         i++;
         if (num > 0 && i%3==0) {

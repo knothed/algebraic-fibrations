@@ -267,7 +267,7 @@ cdef extern from "impl/utils.c":
     arr2d_var append_arrv(arr2d_var arr, int* src, int n)
 
     char* pretty_ms(uint64_t ms, bint subsecond_precision)
-    char* pretty_int(int num)
+    char* pretty_int(int64_t num)
     void print_progress(char* prefix, double progress, int64_t estimated_ms);
 
 cdef extern from "impl/coloring.c":
