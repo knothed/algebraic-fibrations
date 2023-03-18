@@ -154,7 +154,7 @@ def num_isometries(g):
 # When hyp_check, only hyperbolic graphs are checked.
 # Returns all the graphs which fiber. Optionally, writes them to a file in graph6 format.
 # Sensible args are: -c (connected), '{2*n-4}:0' (minimum edges)
-def geng_fibering(n: int, geng: str, args: str, num_queues: int, queue_capacity: int, threads_per_queue: int, hyp_check: bint = 1, min_isos: int = 0, total: int = 0, write_to_file: str = ""):
+def geng_fibering(n: int, geng: str, args: str, num_queues: int, queue_capacity: int, threads_per_queue: int, hyp_check: bint = 1, min_isos: int = 0, total: int64_t = 0, write_to_file: str = ""):
     # Create fifo and start geng > fifo
     fifo = "/tmp/geng"
     try: os.remove(fifo)
@@ -165,8 +165,8 @@ def geng_fibering(n: int, geng: str, args: str, num_queues: int, queue_capacity:
     # Preparations
     cdef arr2d_fixed adj;
     cdef arr2d_var cliques;
-    cdef int i = 0
-    cdef int step = max(1, total/100)
+    cdef int64_t i = 0
+    cdef int64_t step = max(1, total/100)
 
     cdef fibering_scheduler scheduler = make_scheduler(n, num_queues, queue_capacity, threads_per_queue, write_to_file.encode('UTF-8'))
 

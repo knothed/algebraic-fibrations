@@ -300,7 +300,7 @@ void print_progress(char* prefix, double progress, int64_t estimated_ms) {
     printf("\r");
     printf(prefix);
 
-    int percents = (int)(100*progress);
+    int percents = (int)(100*progress+0.5);
     int tenths = MIN(10,percents/10);
     int ones = MIN(10,percents-10*tenths);
     for (int i=0; i<tenths; i++)
