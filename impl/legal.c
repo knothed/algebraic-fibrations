@@ -380,3 +380,32 @@ static inline arr2d_fixed find_legal_orbits_single_alternative(int n, int* color
     return result;
 }
 */
+
+/******** UTILITIES ********/
+
+// The full (not half) orbit of a state under a coloring.
+// It is returned as an arr2d_fixed with a single row.
+arr2d_fixed orbit(int n, int state, int* coloring) {
+    // Convert coloring list into vertex bitmasks
+    int color_masks[n];
+    int num_cols = 0;
+    memset(color_masks,0,n*sizeof(int));
+    for (int i=0; i<n; i++) {
+        color_masks[coloring[i]] += (1<<i);
+        num_cols = MAX(num_cols, coloring[i]+1);
+    }
+
+    // Create orbit
+    int size = 1 << num_cols;
+    int* result = malloc(size * sizeof(int));
+
+    for (int i=0; i<size; i++) {
+        int acted = state;
+        for (int c=0; c<num_cols; c++)
+            if ((i >> c) & 1)
+                acted ^= color_masks[c];
+        result[i] = acted;
+    }
+
+    return arr2d_fixed_create_from(result, size, 1);
+}

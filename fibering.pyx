@@ -108,6 +108,15 @@ def is_hyperbolic(g):
     free_arrf(adj)
     return res
 
+# Given a state as an integer and coloring as a list, get the full (not the half) orbit of the state as a list of integers.
+def orbit_of(state, coloring):
+    cdef int* col = list_to_array(coloring)
+    cdef arr2d_fixed res = orbit(len(coloring), state, col)
+    res_py = list_from_arrf_row(res, 0)
+    free(col)
+    free_arrf(res)
+    return res_py
+
 # Given a state as an integer, get the list of vertices in the state.
 def vertices_in_state(state):
     res = []
@@ -301,6 +310,7 @@ cdef extern from "impl/legal.c":
     ctypedef struct legal_orbits_result:
         arr2d_fixed colorings
         arr2d_var states
+    arr2d_fixed orbit(int n, int state, int* coloring)
 
 
 #### ARRAY CONVERSION ####

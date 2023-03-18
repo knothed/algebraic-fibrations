@@ -1,17 +1,57 @@
-######## Useful functionality ########
-## TODO
+###
+### Additional functionality that is used in the masters thesis.
+###
 
-def coloring_has_legal_orbit():
-# todo
-    return
+######## K-LEGALITY CHECKING ########
 
-def all_k_legal_orbits(g, min_cols=0, max_cols=0, verbose=True, total_progress_bar=True, num_threads=1):
-# todo
-    return
+# Determine which of the legal orbits, as returned by all_legal_orbits, are k-legal (k>0).
+# The return type is similar to the return type of all_legal_orbits.
+# If print_violating_state, print a legal state that is not k-legal for each legal, non k-legal orbit.
+def k_legal_orbits(graph, k, legal_orbits, print_violating_state=True):
+    if curv3(graph) > 0:
+        if print_violating_state:
+            print(f"Graph cannot be 1-legal: curv3 = {curv3(graph)}")
+        return []
 
+    result = []
+    for pair in legal_orbits:
+        coloring = pair['coloring']
+        res_states = []
+        for state in pair['states']:
+            if orbit_is_k_legal(graph, k, coloring, state, print_violating_state):
+                res_states.append(state)
+        if res_states:
+            result.append({"coloring": coloring, "states": res_states})
+    return result
+
+# Precondition: orbit is 0-legal, k>0.
+def orbit_is_k_legal(graph, k, coloring, state, print_violating_state=False):
+    orbit = orbit_of(state, coloring)
+    for verts in map(vertices_in_state, orbit):
+        g = Graph(graph.am()[verts,verts], format='adjacency_matrix')
+        if g.is_tree(): continue
+
+        # g.show() todo: classify the graphs by iso, just like martelli
+        # Check whether G is 1-connected and homologically k-connected
+        cc = g.clique_complex()
+        hom = cc.homology()
+        if cc.fundamental_group().simplified().ngens() > 0:
+            if print_violating_state:
+                print(f"State {verts} is not {k}-legal: pi_1 = {cc.fundamental_group()}")
+            return False
+        for j in [2..k]:
+            if k in hom and hom[k].ngens() > 0:
+                if print_violating_state:
+                    print(f"State {verts} is not {k}-legal: H_{j} = {cc.fundamental_group()}")
+                return False
+    return True
+
+
+# For a graph to have a legal orbit, curv2 must be >= 0. (see JNW paper)
 def curv2(g):
     return 1-g.order()/2+g.size()/4
 
+# For a graph to have a 1-legal orbit, curv3 must be <= 0. (similar argument)
 def curv3(g):
     return curv2(g)-g.triangles_count()/8
 
