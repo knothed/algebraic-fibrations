@@ -29,7 +29,7 @@ int num_colors_upper_bound(int n, arr2d_var cliques, arr2d_fixed legal_states) {
         for (int j=0; j<size_arrv(cliques,i); j++)
             clique_masks[i] += (1 << get_arrv(cliques,i,j));
 
-    int* reduced_masks = malloc(cliques.len*sizeof(int));
+    int reduced_masks[cliques.len];
     int num_reduced = 0;
     int curr_clique_size = 0;
     int curr_clique_size_start_idx = 0; // cliques cannot be contained in same-size cliques
@@ -94,6 +94,7 @@ int num_colors_upper_bound(int n, arr2d_var cliques, arr2d_fixed legal_states) {
     // if (upper_bound < p)
     //    printf("Reduced from %d to %d!\n", p, upper_bound);
 
+    free_arrv(reduced);
     return upper_bound;
 }
 

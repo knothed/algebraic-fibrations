@@ -45,6 +45,7 @@ arr2d_fixed all_legal_states(arr2d_fixed adj, arr2d_fixed isos) {
         }
     }
 
+    free(dict);
     return result;
 }
 
@@ -146,6 +147,7 @@ void* orbit_thread_enter(void* arg) {
         (*args.num_done)++;
     }
 
+    free(legal_copy);
     ((orbit_thread_args*)arg)->result = result;
 }
 

@@ -285,5 +285,15 @@ stream_result scheduler_finish(fibering_scheduler scheduler) {
     free(work);
     free(full);
 
+    // Free stuff
+    free(scheduler.queues[0]->mutex);
+    for (int i=0; i<scheduler.num_queues; i++) {
+        free(scheduler.queues[i]->adj_data);
+        free(scheduler.queues[i]->cliques_data);
+        free(scheduler.queues[i]);
+    }
+    free(scheduler.queues);
+    free(scheduler.wait_time);
+
     return result;
 }

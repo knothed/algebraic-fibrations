@@ -147,7 +147,7 @@ legal_orbits_result graph_fiberings_single_coloring(arr2d_fixed adj, int* colori
     arr2d_fixed colorings = arr2d_fixed_create_from(coloring, n, 1);
 
     legal_orbits_result orbits = do_orbit_search(n, legal_states, colorings, false, NULL, 1, false, NULL);
-    free_arrf(legal_states, isos);
+    free_arrf(isos, legal_states, colorings);
     return orbits;
 }
 
