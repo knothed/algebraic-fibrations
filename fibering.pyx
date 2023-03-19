@@ -6,16 +6,17 @@
 
 from sage.all import *
 from sage.graphs.cliquer import all_cliques
+from sage.matrix.matrix_integer_dense import Matrix_integer_dense
+
 from libc.stdlib cimport malloc, free
 from libc.stdint cimport uint64_t, int64_t, intptr_t
 
+import ctypes
+import random
+import subprocess
 import numpy as np
 cimport numpy as np
 np.import_array()
-import ctypes
-
-from sage.matrix.matrix_integer_dense import Matrix_integer_dense
-import subprocess
 
 #### VIRTUAL ALGEBRAIC FIBERING: LEGAL ORBIT SEARCH ####
 
@@ -165,11 +166,11 @@ def num_isometries(g):
 # Sensible args are: -c (connected), '{2*n-4}:0' (minimum edges)
 def geng_fibering(n: int, geng: str, args: str, num_queues: int, queue_capacity: int, threads_per_queue: int, hyp_check: bint = 1, min_isos: int = 0, total: int64_t = 0, write_to_file: str = ""):
     # Create fifo and start geng > fifo
-    fifo = "/tmp/geng"
+    fifo = f"/tmp/geng{randint(0,999999)}"
     try: os.remove(fifo)
     except OSError: pass
     os.mkfifo(fifo)
-    subprocess.Popen([f'{geng} {n} -c {args} > {fifo}'], shell=True)
+    subprocess.Popen([f'{geng} {n} {args} > {fifo}'], shell=True)
 
     # Preparations
     cdef arr2d_fixed adj;

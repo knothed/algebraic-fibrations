@@ -14,8 +14,8 @@
 static inline int log2_int64(int64_t a) {
     if (a <= 0) return -1;
     int r = 0;
-    int b = a;
-    while (b >>= 1) r++;
+    uint64_t b = a;
+    while (b >>= ((uint64_t)1)) r++;
     return r;
 }
 
