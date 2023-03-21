@@ -4,6 +4,10 @@
 
 ######## K-LEGALITY CHECKING ########
 
+def graph_k_fibers(graph, k, num_threads=1, verbose=True):
+    orbits = all_legal_orbits(graph, num_threads=num_threads, verbose=verbose)
+    return len(k_legal_orbits(graph, k, orbits, verbose)) > 0
+
 # Determine which of the legal orbits, as returned by all_legal_orbits, are k-legal (k>0).
 # The return type is similar to the return type of all_legal_orbits.
 # If print_violating_state, print a legal state that is not k-legal for each legal, non k-legal orbit.
@@ -46,7 +50,6 @@ def orbit_is_k_legal(graph, k, coloring, state, print_violating_state=False):
                 return False
     return True
 
-
 # For a graph to have a legal orbit, curv2 must be >= 0. (see JNW paper)
 def curv2(g):
     return 1-g.order()/2+g.size()/4
@@ -54,6 +57,48 @@ def curv2(g):
 # For a graph to have a 1-legal orbit, curv3 must be <= 0. (similar argument)
 def curv3(g):
     return curv2(g)-g.triangles_count()/8
+
+######## GRAPH ANALYSIS ########
+
+def all_that_k_fiber(graphs, k):
+    return list(filter(lambda a: graph_k_fibers(a, k=k, num_threads=3), graphs))
+
+# Frequency analysis of graph properties.
+def frequencies(graphs, func):
+    res = {}
+    for g in graphs:
+        s = func(g)
+        if s in res:
+            res[s] += 1
+        else:
+            res[s] = 1
+    return res
+
+def clique_number_frequencies(graphs):
+    return frequencies(graphs, lambda a: a.clique_number())
+
+def isom_frequencies(graphs):
+    return frequencies(graphs, num_isometries)
+
+def edge_frequencies(graphs):
+    return frequencies(graphs, lambda a: a.size())
+
+# Return all graphs in `graphs` which are not trivial extensions of any of `other` or the singular graph.
+def filter_nontrivial(graphs, other):
+    z = Graph({0:[],1:[]})
+    trivial = graphs_which_are_trivial_extensions(graphs, other+[z])
+    return [g for g in graphs if g not in trivial]
+
+# Return all graphs in `graphs` which are trivial extensions of any of `other`.
+# Thereby, a trivial extension of G is the join of G with a complete graph (with at least 1 vertex).
+def graphs_which_are_trivial_extensions(graphs, other):
+    def is_trivial_extension(g):
+        for o in other:
+            n = g.order() - o.order()
+            if n > 0 and g.is_isomorphic(o.join(sage.graphs.graph_generators.GraphGenerators.CompleteGraph(n))):
+                return True
+        return False
+    return list(filter(is_trivial_extension, graphs))
 
 ######## CONCRETE GRAPHS ########
 
