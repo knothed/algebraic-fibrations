@@ -28,23 +28,15 @@ legal_orbits_result graph_fiberings(arr2d_fixed adj, arr2d_var cliques, int min_
     }
 
     // Preparations
-    //int64_t t0 = millis();
     arr2d_fixed isos = get_isometries(adj);
-    //if (isos.len < 2) return (legal_orbits_result) { .colorings = arr2d_fixed_create_empty(n, 0), .states = arr2d_var_create_empty(n, 0) };
-//    printf("%d isos\n", isos.len);
-    //int64_t t1 = millis();
     arr2d_fixed legal_states = all_legal_states(adj,isos);
-    //int64_t t2 = millis();
     arr2d_var partitions = cliquewise_vertex_partition(n, cliques);
-    //int64_t t3 = millis();
 
     int cmin = size_arrv(partitions,0); // sage's g.chromatic_number() is too slow, so we start lower
     int cmax = num_colors_upper_bound(n, cliques, legal_states);
     int64_t t4 = millis();
     cmin = MAX(cmin, min_cols);
     if (max_cols > 0) cmax = MIN(cmax, max_cols);
-
-    //printf("\isos: %lld, legal: %lld, parts: %lld, max_cols: %lld\n",t1-t0,t2-t1,t3-t2,t4-t3);
 
     if (verbose) {
         char* legal_len = pretty_int(legal_states.len);

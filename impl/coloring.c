@@ -373,7 +373,6 @@ static inline void make_canonical_form(int n, int* coloring, int num_cols, arr2d
         int dict[num_cols]; // mapping old colors -> new colors
         memset(dict,~0,num_cols*sizeof(int)); // init to -1
 
-        int became_better_at = 100;
         bool is_better = (i==0);
 
         // bring into lexicographically lowest form
@@ -387,7 +386,7 @@ static inline void make_canonical_form(int n, int* coloring, int num_cols, arr2d
                 current_col++;
             }
 
-            // check wheter current coloring is worse, better (or same) than the current best
+            // check whether current coloring is worse, better (or same) than the current best
             if (!is_better && new_col > best[j]) break;
             if (!is_better && new_col < best[j]) is_better = true;
 

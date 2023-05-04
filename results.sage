@@ -1,8 +1,3 @@
-new10 = [ten_graph()]
-new11 = filter_nontrivial(all11, all10)
-new12 = filter_nontrivial(all12, all11)
-new_all = new10 + new11 + new12
-
 all11 = list(map(lambda a: graph_from_graph6(a, 11),
 ['JCQrThmueq_',
  'JCpdbZXlbM_',
@@ -271,3 +266,8 @@ all12 = list(map(lambda a: graph_from_graph6(a, 12),
  'KQjUjqm]V~~~',
  'K^~~~~~~~~~~']
 ))
+
+new10 = [ten_graph()]
+new11 = filter_nontrivial(all11, new10)
+new12 = filter_nontrivial(all12, all11)
+new_all = new10 + new11 + new12

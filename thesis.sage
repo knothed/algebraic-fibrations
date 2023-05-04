@@ -92,10 +92,11 @@ def filter_nontrivial(graphs, other):
 # Return all graphs in `graphs` which are trivial extensions of any of `other`.
 # Thereby, a trivial extension of G is the join of G with a complete graph (with at least 1 vertex).
 def graphs_which_are_trivial_extensions(graphs, other):
+    from sage.graphs.graph_generators import GraphGenerators
     def is_trivial_extension(g):
         for o in other:
             n = g.order() - o.order()
-            if n > 0 and g.is_isomorphic(o.join(sage.graphs.graph_generators.GraphGenerators.CompleteGraph(n))):
+            if n > 0 and g.is_isomorphic(o.join(GraphGenerators.CompleteGraph(n))):
                 return True
         return False
     return list(filter(is_trivial_extension, graphs))

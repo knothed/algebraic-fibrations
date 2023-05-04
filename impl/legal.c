@@ -295,6 +295,7 @@ static inline legal_orbits_result find_legal_orbits_single(int n, int* coloring,
                     legal[acted] = false;
                 } else {
                     orbit_legal = false;
+                    break;
                 }
             }
 
