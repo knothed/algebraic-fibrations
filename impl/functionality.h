@@ -19,6 +19,8 @@ arr2d_fixed reduce_colorings(int n, int num_colors, arr2d_fixed cols, arr2d_fixe
 bool graph_can_fiber(arr2d_fixed adj);
 bool is_graph_hyperbolic(arr2d_fixed adj);
 arr2d_fixed get_isometries(arr2d_fixed adj);
+bool graph_connected(arr2d_fixed adj);
+bool subgraph_connected(arr2d_fixed adj, int sub_size, int vertices[]);
 
 // legal.c
 arr2d_fixed all_legal_states(arr2d_fixed adj, arr2d_fixed isos);

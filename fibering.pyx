@@ -158,19 +158,27 @@ def num_isometries(g):
     return count
 
 
-#### GENG: MULTIPLE GRAPHS ####
+#### ANALYZING A STREAM OF GRAPHS ####
 
 # Use geng to produce a stream of graphs, each of which is checked for fibering.
 # When hyp_check, only hyperbolic graphs are checked.
 # Returns all the graphs which fiber. Optionally, writes them to a file in graph6 format.
-# Sensible args are: -c (connected), '{2*n-4}:0' (minimum edges)
-def geng_fibering(n: int, geng: str, args: str, num_queues: int, queue_capacity: int, threads_per_queue: int, hyp_check: bint = 1, min_isos: int = 0, total: int64_t = 0, write_to_file: str = ""):
-    # Create fifo and start geng > fifo
-    fifo = f"/tmp/geng{randint(0,999999)}"
+# Sensible geng args are: -c (connected), '{2*n-4}:0' (minimum edges)
+def analyze_geng_stream(n: int, geng: str, args: str, num_queues: int, queue_capacity: int, threads_per_queue: int = 1, hyp_check: bint = 1, min_isos: int = 0, total: int64_t = 0, write_to_file: str = ""):
+    cmd = f'{geng} {n} {args}'
+    return analyze_stream(n, cmd, num_queues, queue_capacity, threads_per_queue, hyp_check, min_isos, total, write_to_file)
+
+# Analyze all graphs which are returned by the command. All graphs must have the same order.
+# When hyp_check, only hyperbolic graphs are checked.
+# Returns all the graphs which fiber. Optionally, writes them to a file in graph6 format.
+def analyze_stream(n: int, cmd: str, num_queues: int, queue_capacity: int, threads_per_queue: int = 1, hyp_check: bint = 1, min_isos: int = 0, total: int64_t = 0, write_to_file: str = ""):
+    # Create fifo and start cmd > fifo
+    fifo = f"/tmp/graphs{randint(0,999999)}"
     try: os.remove(fifo)
     except OSError: pass
     os.mkfifo(fifo)
-    subprocess.Popen([f'{geng} {n} {args} > {fifo}'], shell=True)
+
+    subprocess.Popen([f'{cmd} > {fifo}'], shell=True)
 
     # Preparations
     cdef arr2d_fixed adj;
@@ -246,7 +254,8 @@ def graph6_from_graph(g):
     return res.decode('utf-8');
 
 # Convert graph6 -> Graph
-def graph_from_graph6(g6,n):
+def graph_from_graph6(g6):
+    n = ord(g6[0]) - 63
     cdef arr2d_fixed adj = arr2d_fixed_create_empty(n, n*n)
     adj.len = n
     read_adj_matrix_graph6(g6.encode('ascii'), adj.data)

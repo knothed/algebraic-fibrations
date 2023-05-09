@@ -6,12 +6,12 @@
 
 def graph_k_fibers(graph, k, num_threads=1, verbose=True):
     orbits = all_legal_orbits(graph, num_threads=num_threads, verbose=verbose)
-    return len(k_legal_orbits(graph, k, orbits, verbose)) > 0
+    return len(k_legal_orbits(graph, k, orbits, True, verbose)) > 0
 
 # Determine which of the legal orbits, as returned by all_legal_orbits, are k-legal (k>0).
 # The return type is similar to the return type of all_legal_orbits.
 # If print_violating_state, print a legal state that is not k-legal for each legal, non k-legal orbit.
-def k_legal_orbits(graph, k, legal_orbits, print_violating_state=True):
+def k_legal_orbits(graph, k, legal_orbits, single=False, print_violating_state=True):
     if curv3(graph) > 0:
         if print_violating_state:
             print(f"Graph cannot be 1-legal: curv3 = {curv3(graph)}")
@@ -24,6 +24,7 @@ def k_legal_orbits(graph, k, legal_orbits, print_violating_state=True):
         for state in pair['states']:
             if orbit_is_k_legal(graph, k, coloring, state, print_violating_state):
                 res_states.append(state)
+                if single: break
         if res_states:
             result.append({"coloring": coloring, "states": res_states})
     return result
@@ -221,7 +222,6 @@ def valence_geq_6_verts(g):
 # The first nontrivial hyperbolic graph which fibers. It has 10 vertices.
 def ten_graph(n=5):
     g = Graph()
-
     for i in range(n):
         j = (i+1)%n
         g.add_edge(2*i, 2*i+1)
@@ -229,5 +229,15 @@ def ten_graph(n=5):
         g.add_edge(2*i, 2*j+1)
         g.add_edge(2*i+1, 2*j)
         g.add_edge(2*i+1, 2*j+1)
-
     return g
+
+def prism(g, anti=False):
+    p = Graph()
+    n = g.order()
+    p.add_edges(g.edges(sort=False))
+    p.add_edges(map(lambda a: (a[0]+n,a[1]+n),g.edges(sort=False)))
+    for i in range(n):
+        p.add_edge(i,i+n)
+        if anti:
+            p.add_edge((i+1)%n,i+n)
+    return p

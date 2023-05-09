@@ -23,7 +23,7 @@ bool graph_can_fiber(arr2d_fixed adj) {
     if (2*n > e+4) return false;
 
     // check connectedness and treeness
-    bool conn = 1-n+e >= 0;
+    bool conn = graph_connected(adj);
     bool tree = 1-n+e == 0;
     if (n > 2 && !conn) return false;
     if (n > 3 && tree) return false;
@@ -110,4 +110,65 @@ arr2d_fixed get_isometries_impl(arr2d_fixed adj, arr2d_fixed isometries, int cur
     }
 
     return isometries;
+}
+
+/******* GRAPH CONNECTEDNESS *******/
+
+#define MAX_VERTS 32
+typedef struct {
+    int queue[MAX_VERTS];
+    int front; // = -1
+    int rear; // = -1
+} bfs_queue;
+
+bool queue_empty(bfs_queue queue) {
+    return queue.front == -1 || queue.front > queue.rear;
+}
+
+bfs_queue queue_insert(bfs_queue queue, int v) {
+    bfs_queue new = queue;
+
+    if (new.front == -1)
+        new.front = 0;
+    new.rear++;
+    new.queue[new.rear] = v;
+    return new;
+}
+
+bfs_queue queue_delete(bfs_queue queue, int* v) {
+    bfs_queue new = queue;
+
+    *v = new.queue[new.front];
+    new.front++;
+    return new;
+}
+
+bool graph_connected(arr2d_fixed adj) {
+    int n = adj.len;
+    int vertices[n];
+    for (int i=0; i<n; i++) vertices[i] = i;
+    return subgraph_connected(adj, n, vertices);
+}
+
+bool subgraph_connected(arr2d_fixed adj, int sub_size, int vertices[]) {
+    int visited = 0;
+    int all = (1 << sub_size) - 1;
+
+    int v = 0;
+    bfs_queue queue = {.front = -1, .rear = -1};
+    queue = queue_insert(queue, v); // we label the vertices (0, ..., sub_size-1) and then translate via `vertices`
+    visited += (1 << v);
+
+    // Do BFS
+    while (!queue_empty(queue) && visited != all) {
+        queue = queue_delete(queue, &v);
+        for (int i=0; i<sub_size; i++) { // add adjacent unvisited vertices to queue
+            if (!((visited >> i) & 1) && get_arrf(adj,vertices[v],vertices[i])) {
+                visited += (1 << i);
+                queue = queue_insert(queue, i);
+            }
+        }
+    }
+
+    return visited == all;
 }
