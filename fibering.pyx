@@ -23,6 +23,7 @@ np.import_array()
 # Determine (by brute force) whether a graph virtually algebraically fibers. Only consider colorings with up to max_cols colors, if desired.
 # Split up the parallelizable work into multiple threads, if desired.
 def has_legal_orbit(g, min_cols=0, max_cols=0, verbose=True, total_progress_bar=False, num_threads=1):
+    g.relabel()
     cdef int n = g.order()
 
     cdef arr2d_fixed adj = arrf_from_adj_matrix(g.adjacency_matrix())
@@ -42,6 +43,7 @@ def has_legal_orbit(g, min_cols=0, max_cols=0, verbose=True, total_progress_bar=
 # and state represents a SINGLE state: it contains all vertices which are part of the state.
 # Else, None is returned.
 def one_legal_orbit(g, min_cols=0, max_cols=0, verbose=True, total_progress_bar=False, num_threads=1):
+    g.relabel()
     cdef int n = g.order()
     cdef arr2d_fixed adj = arrf_from_adj_matrix(g.adjacency_matrix())
     cliques_py = sorted(list(all_cliques(g,min_size=2)), key=len, reverse=True)
@@ -64,6 +66,7 @@ def one_legal_orbit(g, min_cols=0, max_cols=0, verbose=True, total_progress_bar=
 # The result will be an array of dictionaries {'coloring': list, 'states': list} where coloring is a list representing the coloring,
 # and states is a list representing all the different legal orbits that exist: it contains one state per legal orbit.
 def all_legal_orbits(g, min_cols=0, max_cols=0, verbose=True, total_progress_bar=True, num_threads=1, states_as_vertex_lists=False):
+    g.relabel()
     cdef int n = g.order()
     cdef arr2d_fixed adj = arrf_from_adj_matrix(g.adjacency_matrix())
     cliques_py = sorted(list(all_cliques(g,min_size=2)), key=len, reverse=True)

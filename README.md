@@ -17,9 +17,8 @@ Now take any graph in Sage, such as:
 
 ```sage
 g = polytopes.cuboctahedron().graph()
-g.relabel()
 ```
-You must relabel the graph so its vertices are the set $\{0, \dots, n-1\}$. Now find one or all legal orbits:
+Now find one or all legal orbits:
 
 ```sage
 one_legal_orbit(g)
