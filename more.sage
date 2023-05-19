@@ -4,52 +4,69 @@
 
 ######## K-LEGALITY CHECKING ########
 
-def graph_k_fibers(graph, k, num_threads=1, verbose=True):
-    orbits = all_legal_orbits(graph, num_threads=num_threads, verbose=verbose)
-    return len(k_legal_orbits(graph, k, orbits, True, verbose)) > 0
+# Classify the given graphs by the maximum k for which they k-fiber.
+def classify_max_k_fiberings(graphs, num_threads=1, verbose=True):
+    result = {}
+    for g in graphs:
+        k = max_k_fibers(g, num_threads, verbose)
+        if k in result:
+            result[k].append(g)
+        else:
+            result[k] = [g]
+    return result
 
-# Determine which of the legal orbits, as returned by all_legal_orbits, are k-legal (k>0).
-# The return type is similar to the return type of all_legal_orbits.
-# If print_violating_state, print a legal state that is not k-legal for each legal, non k-legal orbit.
-def k_legal_orbits(graph, k, legal_orbits, single=False, print_violating_state=True):
-    if curv3(graph) > 0:
-        if print_violating_state:
-            print(f"Graph cannot be 1-legal: curv3 = {curv3(graph)}")
-        return []
-
+# All orbits with are k-legal. Precondition: legal_orbits are all legal.
+def k_legal_orbits(graph, k, legal_orbits):
     result = []
     for pair in legal_orbits:
         coloring = pair['coloring']
-        res_states = []
         for state in pair['states']:
-            if orbit_is_k_legal(graph, k, coloring, state, print_violating_state):
-                res_states.append(state)
-                if single: break
-        if res_states:
-            result.append({"coloring": coloring, "states": res_states})
+            if max_k_orbit(graph, k, coloring, state) >= k:
+                result.append({'coloring': coloring, 'state': state})
     return result
 
-# Precondition: orbit is 0-legal, k>0.
-def orbit_is_k_legal(graph, k, coloring, state, print_violating_state=False):
+# Determine the maximum k such that the graph k-fibers.
+# Returns -1 if the graph does not fiber, and returns infinity if the graph fibers for all k.
+def max_k_fibers(graph, num_threads=1, verbose=True):
+    orbits = all_legal_orbits(graph, num_threads=num_threads, verbose=verbose)
+    if not orbits: return -1
+    return max_k_orbits(graph, orbits)
+
+# Determine the maximum k for which there is an orbit in legal_orbits which k-fibers.
+def max_k_orbits(graph, legal_orbits):
+    if curv3(graph) > 0: return 0
+    k = 0
+    for pair in legal_orbits:
+        coloring = pair['coloring']
+        for state in pair['states']:
+            k = max(k, max_k_orbit(graph, k+1, coloring, state))
+            if k == infinity: return k
+    return k
+
+# The maximum k for which this orbit k-fibers.
+# Preconidition: orbit is 0-legal.
+# If k drops below `min_k`, return 0.
+def max_k_orbit(graph, min_k, coloring, state):
+    k = infinity
     orbit = orbit_of(state, coloring)
     for verts in map(vertices_in_state, orbit):
         g = Graph(graph.am()[verts,verts], format='adjacency_matrix')
         if g.is_tree(): continue
 
-        # g.show() todo: classify the graphs by iso, just like martelli
-        # Check whether G is 1-connected and homologically k-connected
         cc = g.clique_complex()
+        if cc.fundamental_group().simplified().ngens() > 0: # nontrivial pi_1
+            return 0
+
+        if k <= 1: continue
         hom = cc.homology()
-        if cc.fundamental_group().simplified().ngens() > 0:
-            if print_violating_state:
-                print(f"State {verts} is not {k}-legal: pi_1 = {cc.fundamental_group()}")
-            return False
-        for j in [2..k]:
-            if k in hom and hom[k].ngens() > 0:
-                if print_violating_state:
-                    print(f"State {verts} is not {k}-legal: H_{j} = {cc.fundamental_group()}")
-                return False
-    return True
+        m = max(hom.keys())
+        for j in [2..min(m, k)]:
+            if hom[j].ngens() > 0:
+                k = j-1
+                if k < min_k: return 0
+                break
+    return k
+
 
 # For a graph to have a legal orbit, curv2 must be >= 0. (see JNW paper)
 def curv2(g):
@@ -179,16 +196,8 @@ def valence_geq_6_verts(g):
 
 
 # The first nontrivial hyperbolic graph which fibers. It has 10 vertices.
-def ten_graph(n=5):
-    g = Graph()
-    for i in range(n):
-        j = (i+1)%n
-        g.add_edge(2*i, 2*i+1)
-        g.add_edge(2*i, 2*j)
-        g.add_edge(2*i, 2*j+1)
-        g.add_edge(2*i+1, 2*j)
-        g.add_edge(2*i+1, 2*j+1)
-    return g
+def ten_graph():
+    return wheel([2,2,2,2,2])
 
 def prism(g, anti=False):
     p = Graph()
@@ -200,3 +209,33 @@ def prism(g, anti=False):
         if anti:
             p.add_edge((i+1)%n,i+n)
     return p
+
+def wheel(ns):
+    g = Graph()
+    ks = list(map(graphs.CompleteGraph, ns))
+    sums = [sum(ns[:i]) for i, x in enumerate(ns)]
+
+    for i in range(len(ns)):
+        g.add_edges(map(lambda e: (e[0]+sums[i],e[1]+sums[i]), ks[i].edges(sort=False)))
+        j = (i+1)%len(ns)
+        for a in range(ns[i]):
+            for b in range(ns[j]):
+                g.add_edge(a+sums[i], b+sums[j])
+
+    return g
+
+def cycle(n):
+    return graphs.CycleGraph(n)
+
+def empty(n):
+    g = Graph()
+    for i in range(n):
+        g.add_vertex(i)
+    return g
+
+def complete(n):
+    return graphs.CompleteGraph(n)
+
+def join(gs):
+    if not gs: return graphs.EmptyGraph()
+    return gs[0].join(join(gs[1:]))
